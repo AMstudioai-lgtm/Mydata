@@ -15,7 +15,7 @@ import com.example.data.db.entity.PropertyEntity
 
 @Database(
     entities = [JournalEntity::class, PropertyEntity::class, EntryRowEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -45,6 +45,17 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Ajoute le sous-format des propriétés numériques (v2 -> v3).
+         * Colonne nullable sans valeur de remplissage : les lignes existantes valent NULL,
+         * ce que le code traite comme "plain". Aucune donnée utilisateur n'est réécrite.
+         */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE properties ADD COLUMN format TEXT DEFAULT NULL")
+            }
+        }
+
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -52,7 +63,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "myapp.db"
                 )
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .build()
                     .also { INSTANCE = it }
             }

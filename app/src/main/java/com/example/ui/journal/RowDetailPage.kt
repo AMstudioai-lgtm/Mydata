@@ -290,7 +290,8 @@ fun RowDetailPage(
                                     "number" -> {
                                         NumberCell(
                                             value = currentValue,
-                                            onValueChange = { onUpdateCell(row.id, prop.id, it) }
+                                            onValueChange = { onUpdateCell(row.id, prop.id, it) },
+                                            format = prop.format
                                         )
                                     }
                                     "date" -> {

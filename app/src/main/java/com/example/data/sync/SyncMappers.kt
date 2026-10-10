@@ -26,6 +26,8 @@ fun PropertyEntity.toJson(now: () -> Long): JSONObject = JSONObject().apply {
     put("kind", kind)
     put("options_json", optionsJson)
     put("sort_order", sortOrder)
+    // null est conserve tel quel : le distant stocke "plain" et le local deduit le defaut.
+    put("format", format ?: JSONObject.NULL)
     put("updated_at", if (updatedAt > 0) updatedAt else now())
     put("deleted_at", deletedAt ?: JSONObject.NULL)
     put("user_id", userId ?: JSONObject.NULL)
@@ -59,6 +61,8 @@ fun propertyFromJson(row: JSONObject): PropertyEntity = PropertyEntity(
     kind = row.getString("kind"),
     optionsJson = row.optString("options_json", "[]"),
     sortOrder = row.optInt("sort_order", 0),
+    // Colonne absente des lignes poussees avant la v1.2.0 : null, donc "plain".
+    format = row.optString("format").takeIf { !row.isNull("format") && it.isNotBlank() },
     updatedAt = row.optLong("updated_at", 0L),
     deletedAt = row.optLong("deleted_at").takeIf { !row.isNull("deleted_at") && it > 0 },
     userId = row.optString("user_id").takeIf { !row.isNull("user_id") && it.isNotBlank() }

@@ -4,6 +4,7 @@ import com.example.data.db.AppDatabase
 import com.example.data.db.entity.EntryRowEntity
 import com.example.data.db.entity.JournalEntity
 import com.example.data.db.entity.PropertyEntity
+import com.example.data.resolvePropertyFormat
 import com.example.data.session.SessionProvider
 import kotlinx.coroutines.flow.Flow
 import org.json.JSONArray
@@ -53,13 +54,16 @@ class JournalRepository(
         journalId: String,
         name: String,
         kind: String,
-        options: List<String> = emptyList()
+        options: List<String> = emptyList(),
+        format: String? = null
     ) {
         require(name.isNotBlank()) { "Nom de propriété requis" }
         require(kind in setOf("text", "number", "date", "select")) { "Type invalide: $kind" }
         if (kind == "select") {
             require(options.isNotEmpty()) { "Options requises pour le type sélection" }
         }
+        // Refuse un format porté par un autre kind, et comble l'absence de format sur number.
+        val resolvedFormat = resolvePropertyFormat(kind, format)
         val order = propertyDao.countByJournal(journalId)
         val optionsJson = JSONArray().apply { options.forEach { put(it) } }.toString()
         val now = System.currentTimeMillis()
@@ -70,6 +74,7 @@ class JournalRepository(
                 journalId = journalId,
                 name = name.trim(),
                 kind = kind,
+                format = resolvedFormat,
                 optionsJson = optionsJson,
                 sortOrder = order,
                 updatedAt = now,
@@ -86,19 +91,23 @@ class JournalRepository(
         propertyId: String,
         name: String,
         kind: String,
-        options: List<String> = emptyList()
+        options: List<String> = emptyList(),
+        format: String? = null
     ) {
         require(name.isNotBlank()) { "Nom de propriété requis" }
         require(kind in setOf("text", "number", "date", "select")) { "Type invalide: $kind" }
         if (kind == "select") {
             require(options.isNotEmpty()) { "Options requises pour le type sélection" }
         }
+        // Même règle qu'à la création : un passage de number à un autre kind remet format à NULL.
+        val resolvedFormat = resolvePropertyFormat(kind, format)
         val optionsJson = JSONArray().apply { options.forEach { put(it) } }.toString()
         propertyDao.updateMeta(
             id = propertyId,
             name = name.trim(),
             kind = kind,
             optionsJson = optionsJson,
+            format = resolvedFormat,
             updatedAt = System.currentTimeMillis(),
             userId = session.currentUserId()
         )

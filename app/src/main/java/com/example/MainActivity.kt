@@ -76,12 +76,12 @@ class MainActivity : ComponentActivity() {
                     onSelectJournal = { id -> journalViewModel.selectJournal(id) },
                     onCreateJournal = { journalViewModel.createJournal() },
                     onDeleteJournal = { id -> journalViewModel.deleteJournal(id) },
-                    onAddProperty = { name, kind, options ->
-                        journalViewModel.addProperty(name, kind, options)
+                    onAddProperty = { name, kind, options, format ->
+                        journalViewModel.addProperty(name, kind, options, format)
                     },
                     onDeleteProperty = { propId -> journalViewModel.deleteProperty(propId) },
-                    onUpdateProperty = { propId, name, kind, options ->
-                        journalViewModel.updateProperty(propId, name, kind, options)
+                    onUpdateProperty = { propId, name, kind, options, format ->
+                        journalViewModel.updateProperty(propId, name, kind, options, format)
                     },
                     onMoveProperty = { propId, delta -> journalViewModel.moveProperty(propId, delta) },
                     onMovePropertyToFront = { propId -> journalViewModel.movePropertyToFront(propId) },

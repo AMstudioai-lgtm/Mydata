@@ -24,6 +24,20 @@ Depot : https://github.com/AMstudioai-lgtm/Mydata (public)
 4. Cree le tag `v<version>` et publie la release avec l'APK en asset.
 - Option `workflow_dispatch` + `dry_run=true` : build sans publier ni bumper.
 
+### Sous-format des proprietes numeriques (feat/sync-supabase-v1.1.0)
+- [x] Colonne `properties.format` (`plain` | `percent` | `dollar`, `null` = plain),
+      migration Room 2 -> 3 sans perte (`MIGRATION_2_3`), pas de fallback destructif.
+- [x] Regle centralisee dans `com.example.data.PropertyFormat` (validation kind/format,
+      lecture de la saisie, mise en forme) ; testee en JUnit pur.
+- [x] Selecteur de format dans `AddPropertyDialog` / `EditPropertyDialog`, visible
+      uniquement sur le type Nombre.
+- [x] Affichage : symbole decoratif dans `NumberCell` (valeur stockee brute), somme et
+      moyenne du pied de tableau au meme format.
+- [x] Synchronisation : colonne `format` dans `SyncMappers` et `supabase/schema.sql`.
+- [ ] **Action manuelle restante** : executer `supabase/schema.sql` sur le projet
+      Supabase. Tant que la colonne distante n'existe pas, l'envoi des proprietes
+      echoue (PostgREST 400, colonne inconnue).
+
 ## Resultats de validation
 | Run | Declencheur | Resultat |
 | --- | --- | --- |
@@ -60,3 +74,5 @@ https://github.com/AMstudioai-lgtm/Mydata/releases
 - 2026-10-10 : mise en place du workflow de release automatique.
 - 2026-10-10 : correctif SDK runner 2026, setup-java v5, option dry_run.
 - 2026-10-10 : depot passe en public, README de distribution ajoute.
+- 2026-10-10 : sous-format des colonnes nombre (plain / percent / dollar),
+      colonne `properties.format`, migration Room 2 -> 3, colonne distante a creer.

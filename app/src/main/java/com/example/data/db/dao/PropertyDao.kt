@@ -25,8 +25,8 @@ interface PropertyDao {
     @Query("SELECT * FROM properties WHERE id = :id")
     suspend fun getById(id: String): PropertyEntity?
 
-    @Query("UPDATE properties SET name = :name, kind = :kind, options_json = :optionsJson, updated_at = :updatedAt, user_id = :userId WHERE id = :id")
-    suspend fun updateMeta(id: String, name: String, kind: String, optionsJson: String, updatedAt: Long, userId: String?)
+    @Query("UPDATE properties SET name = :name, kind = :kind, options_json = :optionsJson, format = :format, updated_at = :updatedAt, user_id = :userId WHERE id = :id")
+    suspend fun updateMeta(id: String, name: String, kind: String, optionsJson: String, format: String?, updatedAt: Long, userId: String?)
 
     @Query("UPDATE properties SET sort_order = :order, updated_at = :updatedAt WHERE id = :id")
     suspend fun updateSortOrder(id: String, order: Int, updatedAt: Long)

@@ -25,9 +25,17 @@ create table if not exists public.properties (
     kind         text not null check (kind in ('text', 'number', 'date', 'select')),
     options_json text not null default '[]',
     sort_order   integer not null default 0,
+    format       text check (format is null or format in ('plain', 'percent', 'dollar')),
     updated_at   bigint not null default 0,
     deleted_at   bigint
 );
+
+-- Migration depuis un schema anterieur a la v1.2.0 : la colonne n'existe pas encore.
+-- Sans valeur par defaut, les lignes existantes restent NULL, ce qui vaut 'plain'.
+alter table public.properties add column if not exists format text;
+alter table public.properties drop constraint if exists properties_format_check;
+alter table public.properties add constraint properties_format_check
+    check (format is null or format in ('plain', 'percent', 'dollar'));
 
 -- -------------------------------------------------------------- entry_rows
 create table if not exists public.entry_rows (
