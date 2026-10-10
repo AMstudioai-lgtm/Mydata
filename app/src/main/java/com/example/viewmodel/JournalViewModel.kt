@@ -89,14 +89,15 @@ class JournalViewModel(
         }
     }
 
-    fun addProperty(name: String, kind: String, options: List<String> = emptyList()) {
+    fun addProperty(name: String, kind: String, options: List<String> = emptyList(), format: String? = null) {
         val journalId = selectedJournal.value?.id ?: return
         viewModelScope.launch {
             repository.addProperty(
                 journalId = journalId,
                 name = name,
                 kind = kind,
-                options = options
+                options = options,
+                format = format
             )
         }
     }
@@ -107,13 +108,14 @@ class JournalViewModel(
         }
     }
 
-    fun updateProperty(propertyId: String, name: String, kind: String, options: List<String> = emptyList()) {
+    fun updateProperty(propertyId: String, name: String, kind: String, options: List<String> = emptyList(), format: String? = null) {
         viewModelScope.launch {
             repository.updateProperty(
                 propertyId = propertyId,
                 name = name,
                 kind = kind,
-                options = options
+                options = options,
+                format = format
             )
         }
     }

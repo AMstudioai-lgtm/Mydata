@@ -22,5 +22,8 @@ data class EntryRowEntity(
     @PrimaryKey val id: String,
     @ColumnInfo(name = "journal_id") val journalId: String,
     @ColumnInfo(name = "values_json") val valuesJson: String = "{}",
-    @ColumnInfo(name = "created_at") val createdAt: Long = System.currentTimeMillis()
+    @ColumnInfo(name = "created_at") val createdAt: Long = System.currentTimeMillis(),
+    @ColumnInfo(name = "updated_at") val updatedAt: Long = System.currentTimeMillis(),
+    @ColumnInfo(name = "deleted_at") val deletedAt: Long? = null,
+    @ColumnInfo(name = "user_id") val userId: String? = null
 )

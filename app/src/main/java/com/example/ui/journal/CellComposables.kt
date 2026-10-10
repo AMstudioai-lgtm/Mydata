@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -42,6 +43,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.FORMAT_DOLLAR
+import com.example.data.FORMAT_PERCENT
+import com.example.data.parseNumberInput
 import com.example.ui.theme.AppColors
 import org.json.JSONArray
 import java.util.Calendar
@@ -104,7 +108,9 @@ fun TextCell(
 fun NumberCell(
     value: String,
     onValueChange: (Double?) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    // null vaut "plain" : les colonnes sans sous-format gardent l'affichage historique.
+    format: String? = null
 ) {
     var textState by remember(value) { mutableStateOf(value) }
 
@@ -114,50 +120,71 @@ fun NumberCell(
             .fillMaxSize(),
         contentAlignment = Alignment.CenterStart
     ) {
-        BasicTextField(
-            value = textState,
-            onValueChange = {
-                textState = it
-            },
-            singleLine = true,
-            textStyle = TextStyle(
-                color = AppColors.TextPrimary,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium
-            ),
-            cursorBrush = SolidColor(AppColors.Accent),
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Number,
-                imeAction = ImeAction.Done
-            ),
-            keyboardActions = KeyboardActions(
-                onDone = {
-                    val normalized = textState.trim().replace(",", ".")
-                    val parsed = normalized.toDoubleOrNull()
-                    onValueChange(parsed)
-                }
-            ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .onFocusChanged { focusState ->
-                    if (!focusState.isFocused && textState != value) {
-                        val normalized = textState.trim().replace(",", ".")
-                        val parsed = normalized.toDoubleOrNull()
-                        onValueChange(parsed)
-                    }
-                }
-                .testTag("number_cell_input"),
-            decorationBox = { innerTextField ->
-                if (textState.isEmpty()) {
-                    Text(
-                        text = "0.0",
-                        color = AppColors.TextMuted,
-                        fontSize = 13.sp
-                    )
-                }
-                innerTextField()
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Le symbole est purement décoratif : la valeur stockée reste un nombre brut.
+            if (format == FORMAT_DOLLAR) {
+                Text(
+                    text = "$",
+                    color = AppColors.TextSecondary,
+                    fontSize = 13.sp
+                )
+                Spacer(modifier = Modifier.width(2.dp))
             }
-        )
+
+            BasicTextField(
+                value = textState,
+                onValueChange = {
+                    textState = it
+                },
+                singleLine = true,
+                textStyle = TextStyle(
+                    color = AppColors.TextPrimary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium
+                ),
+                cursorBrush = SolidColor(AppColors.Accent),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Number,
+                    imeAction = ImeAction.Done
+                ),
+                keyboardActions = KeyboardActions(
+                    onDone = {
+                        onValueChange(parseNumberInput(textState))
+                    }
+                ),
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .onFocusChanged { focusState ->
+                        if (!focusState.isFocused && textState != value) {
+                            onValueChange(parseNumberInput(textState))
+                        }
+                    }
+                    .testTag("number_cell_input"),
+                decorationBox = { innerTextField ->
+                    if (textState.isEmpty()) {
+                        Text(
+                            text = "0.0",
+                            color = AppColors.TextMuted,
+                            fontSize = 13.sp
+                        )
+                    }
+                    innerTextField()
+                }
+            )
+
+            if (format == FORMAT_PERCENT) {
+                Spacer(modifier = Modifier.width(2.dp))
+                Text(
+                    text = "%",
+                    color = AppColors.TextSecondary,
+                    fontSize = 13.sp
+                )
+            }
+        }
     }
 }
 

@@ -5,12 +5,18 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.data.auth.AuthState
 import com.example.ui.shell.Shell
 import com.example.ui.theme.AppTheme
 import com.example.viewmodel.AuthViewModel
 import com.example.viewmodel.JournalViewModel
+import com.example.viewmodel.SyncViewModel
 
 class MainActivity : ComponentActivity() {
 
@@ -29,6 +35,10 @@ class MainActivity : ComponentActivity() {
             AuthViewModel.Factory(container.authService)
         }
 
+        val syncViewModel: SyncViewModel by viewModels {
+            SyncViewModel.Factory(container.syncRepository)
+        }
+
         setContent {
             val journals by journalViewModel.journals.collectAsStateWithLifecycle()
             val selectedJournal by journalViewModel.selectedJournal.collectAsStateWithLifecycle()
@@ -39,6 +49,19 @@ class MainActivity : ComponentActivity() {
             val authState by authViewModel.authState.collectAsStateWithLifecycle()
             val isAuthSubmitting by authViewModel.isSubmitting.collectAsStateWithLifecycle()
             val authErrorMessage by authViewModel.errorMessage.collectAsStateWithLifecycle()
+
+            val syncStatus by syncViewModel.status.collectAsStateWithLifecycle()
+            val syncOutcome by syncViewModel.lastOutcome.collectAsStateWithLifecycle()
+            val isSyncAvailable by syncViewModel.isAvailable.collectAsStateWithLifecycle()
+
+            // Une connexion qui vient de réussir déclenche la synchronisation immédiatement,
+            // pour que l'utilisateur retrouve ses données sans action supplémentaire.
+            var wasLoggedIn by remember { mutableStateOf(authState is AuthState.LoggedIn) }
+            LaunchedEffect(authState) {
+                val isLoggedIn = authState is AuthState.LoggedIn
+                if (isLoggedIn && !wasLoggedIn) syncViewModel.syncNow()
+                wasLoggedIn = isLoggedIn
+            }
 
             AppTheme {
                 Shell(
@@ -53,12 +76,12 @@ class MainActivity : ComponentActivity() {
                     onSelectJournal = { id -> journalViewModel.selectJournal(id) },
                     onCreateJournal = { journalViewModel.createJournal() },
                     onDeleteJournal = { id -> journalViewModel.deleteJournal(id) },
-                    onAddProperty = { name, kind, options ->
-                        journalViewModel.addProperty(name, kind, options)
+                    onAddProperty = { name, kind, options, format ->
+                        journalViewModel.addProperty(name, kind, options, format)
                     },
                     onDeleteProperty = { propId -> journalViewModel.deleteProperty(propId) },
-                    onUpdateProperty = { propId, name, kind, options ->
-                        journalViewModel.updateProperty(propId, name, kind, options)
+                    onUpdateProperty = { propId, name, kind, options, format ->
+                        journalViewModel.updateProperty(propId, name, kind, options, format)
                     },
                     onMoveProperty = { propId, delta -> journalViewModel.moveProperty(propId, delta) },
                     onMovePropertyToFront = { propId -> journalViewModel.movePropertyToFront(propId) },
@@ -72,7 +95,12 @@ class MainActivity : ComponentActivity() {
                     onDeleteRow = { rowId -> journalViewModel.deleteRow(rowId) },
                     onSignIn = { email, password -> authViewModel.signIn(email, password) },
                     onSignUp = { email, password -> authViewModel.signUp(email, password) },
-                    onSignOut = { authViewModel.signOut() }
+                    onSignOut = { authViewModel.signOut() },
+                    syncStatus = syncStatus,
+                    syncOutcome = syncOutcome,
+                    isSyncAvailable = isSyncAvailable,
+                    onSync = { syncViewModel.syncNow() },
+                    onDismissSyncFeedback = { syncViewModel.clearFeedback() }
                 )
             }
         }

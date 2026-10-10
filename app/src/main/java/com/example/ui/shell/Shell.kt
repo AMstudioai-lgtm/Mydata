@@ -72,6 +72,8 @@ import com.example.ui.auth.AuthButton
 import com.example.ui.auth.AuthDialog
 import com.example.ui.journal.JournalPage
 import com.example.ui.journal.RowDetailPage
+import com.example.data.sync.SyncOutcome
+import com.example.data.sync.SyncStatus
 import com.example.ui.settings.SettingsPage
 import com.example.ui.theme.AppColors
 import kotlinx.coroutines.launch
@@ -90,9 +92,9 @@ fun Shell(
     onSelectJournal: (String) -> Unit,
     onCreateJournal: () -> Unit,
     onDeleteJournal: (String) -> Unit,
-    onAddProperty: (name: String, kind: String, options: List<String>) -> Unit,
+    onAddProperty: (name: String, kind: String, options: List<String>, format: String?) -> Unit,
     onDeleteProperty: (String) -> Unit,
-    onUpdateProperty: (propertyId: String, name: String, kind: String, options: List<String>) -> Unit,
+    onUpdateProperty: (propertyId: String, name: String, kind: String, options: List<String>, format: String?) -> Unit,
     onMoveProperty: (propId: String, delta: Int) -> Unit,
     onMovePropertyToFront: (propId: String) -> Unit,
     onMovePropertyToBack: (propId: String) -> Unit,
@@ -103,7 +105,12 @@ fun Shell(
     onDeleteRow: (rowId: String) -> Unit,
     onSignIn: (String, String) -> Unit,
     onSignUp: (String, String) -> Unit,
-    onSignOut: () -> Unit
+    onSignOut: () -> Unit,
+    syncStatus: SyncStatus,
+    syncOutcome: SyncOutcome?,
+    isSyncAvailable: Boolean,
+    onSync: () -> Unit,
+    onDismissSyncFeedback: () -> Unit
 ) {
     var currentPageIndex by remember { mutableIntStateOf(0) } // 0 = Journal, 1 = Settings
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -262,7 +269,7 @@ fun Shell(
                                         .padding(start = 24.dp, end = 12.dp, top = 2.dp, bottom = 2.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    // Vertical indentation guide line (VS Code / Notion tree view line)
+                                    // Vertical indentation guide line
                                     Box(
                                         modifier = Modifier
                                             .width(2.dp)
@@ -447,7 +454,12 @@ fun Shell(
                     SettingsPage(
                         authState = authState,
                         onOpenAuthDialog = { showAuthDialog = true },
-                        onSignOut = onSignOut
+                        onSignOut = onSignOut,
+                        syncStatus = syncStatus,
+                        syncOutcome = syncOutcome,
+                        isSyncAvailable = isSyncAvailable,
+                        onSync = onSync,
+                        onDismissSyncFeedback = onDismissSyncFeedback
                     )
                 }
             }

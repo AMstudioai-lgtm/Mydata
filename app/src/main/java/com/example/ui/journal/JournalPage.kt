@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.sp
 import com.example.data.db.entity.EntryRowEntity
 import com.example.data.db.entity.JournalEntity
 import com.example.data.db.entity.PropertyEntity
+import com.example.data.FORMAT_PLAIN
 import com.example.ui.theme.AppColors
 
 @Composable
@@ -55,9 +56,9 @@ fun JournalPage(
     hasAnyJournals: Boolean,
     onCreateJournal: () -> Unit,
     onDeleteJournal: (String) -> Unit,
-    onAddProperty: (name: String, kind: String, options: List<String>) -> Unit,
+    onAddProperty: (name: String, kind: String, options: List<String>, format: String?) -> Unit,
     onDeleteProperty: (String) -> Unit,
-    onUpdateProperty: (propertyId: String, name: String, kind: String, options: List<String>) -> Unit,
+    onUpdateProperty: (propertyId: String, name: String, kind: String, options: List<String>, format: String?) -> Unit,
     onAddRow: () -> Unit,
     onUpdateCell: (rowId: String, propId: String, value: Any?) -> Unit,
     onDeleteRow: (rowId: String) -> Unit,
@@ -111,7 +112,7 @@ fun JournalPage(
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
-                    text = "Crée ta première base de données dynamique style Notion pour gérer et analyser toutes tes données.",
+                    text = "Crée ta première base de données dynamique pour gérer et analyser toutes tes données.",
                     fontSize = 13.sp,
                     color = AppColors.TextSecondary,
                     textAlign = TextAlign.Center,
@@ -266,11 +267,11 @@ fun JournalPage(
                             // Quick preset button for convenience
                             OutlinedButton(
                                 onClick = {
-                                    onAddProperty("Nom", "text", emptyList())
-                                    onAddProperty("Catégorie", "select", listOf("Projet", "Finance", "Tâche", "Autre"))
-                                    onAddProperty("Statut", "select", listOf("À faire", "En cours", "Terminé"))
-                                    onAddProperty("Montant", "number", emptyList())
-                                    onAddProperty("Date", "date", emptyList())
+                                    onAddProperty("Nom", "text", emptyList(), null)
+                                    onAddProperty("Catégorie", "select", listOf("Projet", "Finance", "Tâche", "Autre"), null)
+                                    onAddProperty("Statut", "select", listOf("À faire", "En cours", "Terminé"), null)
+                                    onAddProperty("Montant", "number", emptyList(), FORMAT_PLAIN)
+                                    onAddProperty("Date", "date", emptyList(), null)
                                 },
                                 border = BorderStroke(1.dp, AppColors.Border),
                                 colors = ButtonDefaults.outlinedButtonColors(

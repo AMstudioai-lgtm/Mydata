@@ -49,9 +49,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.db.entity.EntryRowEntity
 import com.example.data.db.entity.PropertyEntity
+import com.example.data.formatNumberValue
+import com.example.data.parseNumberInput
 import com.example.ui.theme.AppColors
 import org.json.JSONObject
-import java.util.Locale
 
 @Composable
 fun TableView(
@@ -84,7 +85,7 @@ fun TableView(
                 var count = 0
                 for (row in rows) {
                     val value = parseCellString(row.valuesJson, prop.id)
-                    val num = value?.replace(",", ".")?.toDoubleOrNull()
+                    val num = parseNumberInput(value)
                     if (num != null) {
                         sum += num
                         count++
@@ -405,7 +406,8 @@ fun TableView(
                                                     value = cellValue,
                                                     onValueChange = { newDouble ->
                                                         onUpdateCell(row.id, prop.id, newDouble)
-                                                    }
+                                                    },
+                                                    format = prop.format
                                                 )
                                             }
                                             "date" -> {
@@ -428,7 +430,7 @@ fun TableView(
                                         }
                                     }
 
-                                    // Primary Column Mini Pencil Button to open row page (Notion style)
+                                    // Primary Column Mini Pencil Button to open row page
                                     if (isFirst) {
                                         IconButton(
                                             onClick = { onOpenRow(row) },
@@ -501,10 +503,11 @@ fun TableView(
                     ) {
                         if (prop.kind == "number") {
                             val stats = numberStats[prop.id] ?: Pair(0.0, 0.0)
+                            // Le pied de tableau reprend le sous-format de la colonne.
                             val displayText = if (calculationMode == "sum") {
-                                "Σ " + formatStat(stats.first)
+                                "Σ " + formatNumberValue(stats.first, prop.format)
                             } else {
-                                "moy " + formatStat(stats.second)
+                                "moy " + formatNumberValue(stats.second, prop.format)
                             }
 
                             Row(
@@ -600,13 +603,5 @@ private fun parseCellString(valuesJson: String, propId: String): String? {
         if (obj.has(propId)) obj.optString(propId) else null
     } catch (_: Exception) {
         null
-    }
-}
-
-private fun formatStat(value: Double): String {
-    return if (value % 1.0 == 0.0) {
-        value.toLong().toString()
-    } else {
-        String.format(Locale.US, "%.2f", value)
     }
 }

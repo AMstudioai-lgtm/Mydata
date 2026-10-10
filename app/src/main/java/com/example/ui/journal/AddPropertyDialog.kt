@@ -37,17 +37,22 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.example.data.FORMAT_DOLLAR
+import com.example.data.FORMAT_PERCENT
+import com.example.data.FORMAT_PLAIN
 import com.example.ui.theme.AppColors
 
 @Composable
 fun AddPropertyDialog(
     onDismiss: () -> Unit,
-    onAddProperty: (name: String, kind: String, options: List<String>) -> Unit
+    onAddProperty: (name: String, kind: String, options: List<String>, format: String?) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
     var selectedKind by remember { mutableStateOf("text") }
     var optionsText by remember { mutableStateOf("Gain, Perte, Break-Even") }
+    var selectedFormat by remember { mutableStateOf(FORMAT_PLAIN) }
     var dropdownExpanded by remember { mutableStateOf(false) }
+    var formatDropdownExpanded by remember { mutableStateOf(false) }
     var errorText by remember { mutableStateOf<String?>(null) }
 
     val kindLabels = mapOf(
@@ -55,6 +60,12 @@ fun AddPropertyDialog(
         "number" to "Nombre",
         "date" to "Date",
         "select" to "Sélection"
+    )
+
+    val formatLabels = mapOf(
+        FORMAT_PLAIN to "Nom libre",
+        FORMAT_PERCENT to "Pourcentage",
+        FORMAT_DOLLAR to "Dollars"
     )
 
     Dialog(onDismissRequest = onDismiss) {
@@ -156,6 +167,67 @@ fun AddPropertyDialog(
                     }
                 }
 
+                // Sous-format des nombres, imbriqué sous le type ; masqué pour les autres types.
+                if (selectedKind == "number") {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "Format",
+                        fontSize = 12.sp,
+                        color = AppColors.TextSecondary,
+                        modifier = Modifier.padding(start = 12.dp)
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Box(modifier = Modifier.fillMaxWidth().padding(start = 12.dp)) {
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { formatDropdownExpanded = true }
+                                .testTag("property_format_selector"),
+                            shape = RoundedCornerShape(4.dp),
+                            color = AppColors.Background,
+                            border = BorderStroke(1.dp, AppColors.Border)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 14.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = formatLabels[selectedFormat] ?: "Nom libre",
+                                    color = AppColors.TextPrimary,
+                                    fontSize = 14.sp
+                                )
+                                Icon(
+                                    imageVector = Icons.Default.ArrowDropDown,
+                                    contentDescription = "Choisir",
+                                    tint = AppColors.TextSecondary
+                                )
+                            }
+                        }
+
+                        DropdownMenu(
+                            expanded = formatDropdownExpanded,
+                            onDismissRequest = { formatDropdownExpanded = false },
+                            modifier = Modifier
+                                .background(AppColors.Panel)
+                                .testTag("property_format_dropdown")
+                        ) {
+                            formatLabels.forEach { (formatKey, label) ->
+                                DropdownMenuItem(
+                                    text = { Text(label, color = AppColors.TextPrimary) },
+                                    onClick = {
+                                        selectedFormat = formatKey
+                                        formatDropdownExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
                 // If select kind, show options input
                 if (selectedKind == "select") {
                     Spacer(modifier = Modifier.height(12.dp))
@@ -219,7 +291,9 @@ fun AddPropertyDialog(
                                 errorText = "Veuillez ajouter au moins une option"
                                 return@Button
                             }
-                            onAddProperty(name, selectedKind, parsedOptions)
+                            // Le format ne voyage que sur une colonne numérique, sinon il reste nul.
+                            val format = if (selectedKind == "number") selectedFormat else null
+                            onAddProperty(name, selectedKind, parsedOptions, format)
                             onDismiss()
                         },
                         colors = ButtonDefaults.buttonColors(

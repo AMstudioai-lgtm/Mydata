@@ -168,7 +168,7 @@ fun RowDetailPage(
                 .verticalScroll(scrollState)
                 .padding(20.dp)
         ) {
-            // Notion-like Big Page Title (linked to primary property)
+            // Big Page Title (linked to primary property)
             if (primaryProperty != null) {
                 Text(
                     text = "${primaryProperty.name} (Colonne principale)",
@@ -216,7 +216,7 @@ fun RowDetailPage(
             HorizontalDivider(color = AppColors.Border)
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Notion Properties List (Key-Value attributes)
+            // Properties List (Key-Value attributes)
             Text(
                 text = "PROPRIÉTÉS DE L'ÉLÉMENT",
                 fontSize = 11.sp,
@@ -290,7 +290,8 @@ fun RowDetailPage(
                                     "number" -> {
                                         NumberCell(
                                             value = currentValue,
-                                            onValueChange = { onUpdateCell(row.id, prop.id, it) }
+                                            onValueChange = { onUpdateCell(row.id, prop.id, it) },
+                                            format = prop.format
                                         )
                                     }
                                     "date" -> {
@@ -325,7 +326,7 @@ fun RowDetailPage(
             HorizontalDivider(color = AppColors.Border)
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Notion Page Body: Extended Notes & Details
+            // Page Body: Extended Notes & Details
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = Icons.Default.EditNote,

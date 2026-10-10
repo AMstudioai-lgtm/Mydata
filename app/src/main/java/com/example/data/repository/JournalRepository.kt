@@ -4,12 +4,17 @@ import com.example.data.db.AppDatabase
 import com.example.data.db.entity.EntryRowEntity
 import com.example.data.db.entity.JournalEntity
 import com.example.data.db.entity.PropertyEntity
+import com.example.data.resolvePropertyFormat
+import com.example.data.session.SessionProvider
 import kotlinx.coroutines.flow.Flow
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 
-class JournalRepository(private val db: AppDatabase) {
+class JournalRepository(
+    private val db: AppDatabase,
+    private val session: SessionProvider
+) {
     private val journalDao = db.journalDao()
     private val propertyDao = db.propertyDao()
     private val entryRowDao = db.entryRowDao()
@@ -20,12 +25,26 @@ class JournalRepository(private val db: AppDatabase) {
         val count = journalDao.count() + 1
         val id = UUID.randomUUID().toString()
         val name = if (!customName.isNullOrBlank()) customName else "Database $count"
-        journalDao.insert(JournalEntity(id = id, name = name))
+        val now = System.currentTimeMillis()
+        journalDao.upsert(
+            JournalEntity(
+                id = id,
+                name = name,
+                createdAt = now,
+                updatedAt = now,
+                userId = session.currentUserId()
+            )
+        )
         return id
     }
 
+    /**
+     * Suppression logique : la ligne reste en base avec deleted_at renseigné pour que la
+     * suppression puisse être propagée au cloud. Le GC supprime les tombes après 30 jours.
+     */
     suspend fun deleteJournal(id: String) {
-        journalDao.deleteById(id)
+        val now = System.currentTimeMillis()
+        journalDao.softDelete(id, now)
     }
 
     fun watchProps(journalId: String): Flow<List<PropertyEntity>> =
@@ -35,54 +54,78 @@ class JournalRepository(private val db: AppDatabase) {
         journalId: String,
         name: String,
         kind: String,
-        options: List<String> = emptyList()
+        options: List<String> = emptyList(),
+        format: String? = null
     ) {
         require(name.isNotBlank()) { "Nom de propriété requis" }
         require(kind in setOf("text", "number", "date", "select")) { "Type invalide: $kind" }
         if (kind == "select") {
             require(options.isNotEmpty()) { "Options requises pour le type sélection" }
         }
+        // Refuse un format porté par un autre kind, et comble l'absence de format sur number.
+        val resolvedFormat = resolvePropertyFormat(kind, format)
         val order = propertyDao.countByJournal(journalId)
-        val jsonArray = JSONArray()
-        options.forEach { jsonArray.put(it) }
-        val optionsJson = jsonArray.toString()
+        val optionsJson = JSONArray().apply { options.forEach { put(it) } }.toString()
+        val now = System.currentTimeMillis()
 
-        propertyDao.insert(
+        propertyDao.upsert(
             PropertyEntity(
                 id = UUID.randomUUID().toString(),
                 journalId = journalId,
                 name = name.trim(),
                 kind = kind,
+                format = resolvedFormat,
                 optionsJson = optionsJson,
-                sortOrder = order
+                sortOrder = order,
+                updatedAt = now,
+                userId = session.currentUserId()
             )
         )
     }
 
     suspend fun deleteProperty(propertyId: String) {
-        propertyDao.deleteById(propertyId)
+        propertyDao.softDelete(propertyId, System.currentTimeMillis())
     }
 
     suspend fun updateProperty(
         propertyId: String,
         name: String,
         kind: String,
-        options: List<String> = emptyList()
+        options: List<String> = emptyList(),
+        format: String? = null
     ) {
         require(name.isNotBlank()) { "Nom de propriété requis" }
         require(kind in setOf("text", "number", "date", "select")) { "Type invalide: $kind" }
         if (kind == "select") {
             require(options.isNotEmpty()) { "Options requises pour le type sélection" }
         }
-        val jsonArray = JSONArray()
-        options.forEach { jsonArray.put(it) }
-        val optionsJson = jsonArray.toString()
-        propertyDao.updateProperty(propertyId, name.trim(), kind, optionsJson)
+        // Même règle qu'à la création : un passage de number à un autre kind remet format à NULL.
+        val resolvedFormat = resolvePropertyFormat(kind, format)
+        val optionsJson = JSONArray().apply { options.forEach { put(it) } }.toString()
+        propertyDao.updateMeta(
+            id = propertyId,
+            name = name.trim(),
+            kind = kind,
+            optionsJson = optionsJson,
+            format = resolvedFormat,
+            updatedAt = System.currentTimeMillis(),
+            userId = session.currentUserId()
+        )
+    }
+
+    suspend fun renameJournal(journalId: String, name: String) {
+        journalDao.updateMeta(
+            id = journalId,
+            name = name,
+            updatedAt = System.currentTimeMillis(),
+            userId = session.currentUserId()
+        )
     }
 
     suspend fun reorderProperties(orderedPropertyIds: List<String>) {
+        val now = System.currentTimeMillis()
         orderedPropertyIds.forEachIndexed { index, propId ->
-            propertyDao.updateSortOrder(propId, index)
+            propertyDao.updateSortOrder(propId, index, now)
         }
     }
 
@@ -91,10 +134,14 @@ class JournalRepository(private val db: AppDatabase) {
 
     suspend fun addRow(journalId: String): String {
         val id = UUID.randomUUID().toString()
-        entryRowDao.insert(
+        val now = System.currentTimeMillis()
+        entryRowDao.upsert(
             EntryRowEntity(
                 id = id,
-                journalId = journalId
+                journalId = journalId,
+                createdAt = now,
+                updatedAt = now,
+                userId = session.currentUserId()
             )
         )
         return id
@@ -113,10 +160,16 @@ class JournalRepository(private val db: AppDatabase) {
         } else {
             jsonObj.put(propId, value)
         }
-        entryRowDao.updateValues(rowId, jsonObj.toString())
+        entryRowDao.updateValues(
+            id = rowId,
+            valuesJson = jsonObj.toString(),
+            updatedAt = System.currentTimeMillis(),
+            // Conserve le propriétaire déjà connu, sinon annexe la ligne au compte connecté.
+            userId = row.userId ?: session.currentUserId()
+        )
     }
 
     suspend fun deleteRow(rowId: String) {
-        entryRowDao.deleteById(rowId)
+        entryRowDao.softDelete(rowId, System.currentTimeMillis())
     }
 }
