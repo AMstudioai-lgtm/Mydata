@@ -40,8 +40,8 @@ class PropertyFormatTest {
 
     @Test
     fun `les zeros inutiles sont retires`() {
-        assertEquals("3.25", formatNumberValue(3.25, FORMAT_DOLLAR))
-        assertEquals("0", formatNumberValue(0.0, FORMAT_PERCENT))
+        assertEquals("$3.25", formatNumberValue(3.25, FORMAT_DOLLAR))
+        assertEquals("0 %", formatNumberValue(0.0, FORMAT_PERCENT))
     }
 
     // --- Lecture de la saisie ------------------------------------------------
