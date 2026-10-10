@@ -32,6 +32,21 @@ jobs:
 
       - name: Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # On evite le paquet "tools" (supprime du depot Google) qui fait echouer l action.
+          packages: ""
+          log-accepted-licenses: false
+
+      # La plateforme 36.1 (minorApiLevel) et les build-tools sont absents du runner :
+      # AGP les telecharge de lui-meme, on anticipe ici pour gagner un cycle.
+      - name: Installer les composants SDK
+        run: |
+          set -euo pipefail
+          SDKMANAGER="sdkmanager"
+          command -v sdkmanager >/dev/null 2>&1 || SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          for p in "platform-tools" "platforms;android-36" "platforms;android-36.1"; do
+            "$SDKMANAGER" "$p" || echo "::notice::$p indisponible, AGP completera au build"
+          done
 
       # Le depot n a pas de gradlew versionne : on installe la version attendue par le projet.
       - name: Gradle 9.3.1
