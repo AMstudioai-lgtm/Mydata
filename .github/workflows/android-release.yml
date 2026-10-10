@@ -1,0 +1,128 @@
+name: Android Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+# Le token par defaut doit pouvoir pousser des tags et publier des releases.
+permissions:
+  contents: write
+
+# Serialise les builds : deux pushes rapproches ne creent jamais deux fois la meme version.
+concurrency:
+  group: android-release-main
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build et publication de la release APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Android SDK
+        uses: android-actions/setup-android@v3
+
+      # Le depot n a pas de gradlew versionne : on installe la version attendue par le projet.
+      - name: Gradle 9.3.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 9.3.1
+
+      - name: Determiner la version
+        id: version
+        run: |
+          set -euo pipefail
+          CURRENT=$(grep -oP "(?<=versionName = \")[^\"]+" app/build.gradle.kts)
+          CURRENT_CODE=$(grep -oP "(?<=versionCode = )[0-9]+" app/build.gradle.kts)
+          git fetch --tags --force
+          if git rev-parse -q --verify "refs/tags/v$CURRENT" >/dev/null; then
+            # Version deja publiee : incremente le patch et pousse le bump.
+            MAJOR=${CURRENT%%.*}
+            REST=${CURRENT#*.}
+            MINOR=${REST%%.*}
+            PATCH=${REST#*.}
+            VERSION="$MAJOR.$MINOR.$((PATCH + 1))"
+            CODE=$((CURRENT_CODE + 1))
+            sed -i -E -e "s/versionCode = [0-9]+/versionCode = $CODE/" -e "s/versionName = \"[^\"]*\"/versionName = \"$VERSION\"/" app/build.gradle.kts
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -am "chore: bump version $VERSION [skip ci]"
+            git push origin HEAD:main
+          else
+            VERSION="$CURRENT"
+            CODE="$CURRENT_CODE"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "Version publiee : $VERSION (code $CODE)"
+
+      - name: Preparer la signature
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_BASE64 }}
+          STORE_PW: ${{ secrets.STORE_PASSWORD }}
+          KEY_PW: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -n "$KEYSTORE_B64" ]; then
+            # Option recommandee : keystore stable fourni dans les secrets du depot.
+            echo "$KEYSTORE_B64" | base64 -d > "$GITHUB_WORKSPACE/release.jks"
+            echo "KEYSTORE_PATH=$GITHUB_WORKSPACE/release.jks" >> "$GITHUB_ENV"
+            echo "STORE_PASSWORD=$STORE_PW" >> "$GITHUB_ENV"
+            echo "KEY_PASSWORD=$KEY_PW" >> "$GITHUB_ENV"
+            echo "SIGNING=stable" >> "$GITHUB_ENV"
+          else
+            # Repli : cle jetable generee a chaque run. APK installable mais signature
+            # changeante : les utilisateurs devront desinstaller pour mettre a jour.
+            keytool -genkeypair -v -keystore "$GITHUB_WORKSPACE/ci.jks" -alias upload -storetype PKCS12 -keyalg RSA -keysize 2048 -validity 9125 -storepass ci-ci-ci -keypass ci-ci-ci -dname "CN=Mydata CI, OU=Build, O=Mydata, C=FR"
+            echo "KEYSTORE_PATH=$GITHUB_WORKSPACE/ci.jks" >> "$GITHUB_ENV"
+            echo "STORE_PASSWORD=ci-ci-ci" >> "$GITHUB_ENV"
+            echo "KEY_PASSWORD=ci-ci-ci" >> "$GITHUB_ENV"
+            echo "SIGNING=ephemeral" >> "$GITHUB_ENV"
+          fi
+
+      - name: Compiler l APK release
+        run: gradle :app:assembleRelease --no-daemon --stacktrace
+
+      - name: Renommer l APK
+        run: |
+          set -euo pipefail
+          V="${{ steps.version.outputs.version }}"
+          cp app/build/outputs/apk/release/app-release.apk "Mydata-$V.apk"
+          ls -lh "Mydata-$V.apk"
+
+      - name: Notes de release
+        run: |
+          set -euo pipefail
+          PREV=$(git describe --tags --abbrev=0 --match "v*" HEAD^ 2>/dev/null || true)
+          if [ -n "$PREV" ]; then
+            git log --pretty=format:"- %s" "$PREV"..HEAD | sed "/^$/d" > changelog.md
+          else
+            echo "- Premiere release publiee" > changelog.md
+          fi
+          if [ "$SIGNING" = "ephemeral" ]; then
+            echo "" >> changelog.md
+            echo "> [!WARNING]" >> changelog.md
+            echo "> Build signe avec une cle jetable generee par le CI. La signature change" >> changelog.md
+            echo "> a chaque release : desinstaller l ancienne version avant d installer." >> changelog.md
+          fi
+
+      - name: Publier la release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          COMMIT: ${{ steps.version.outputs.commit }}
+        run: |
+          set -euo pipefail
+          gh release create "v$VERSION" "Mydata-$VERSION.apk" --title "Mydata v$VERSION" --notes-file changelog.md --target "$COMMIT"
