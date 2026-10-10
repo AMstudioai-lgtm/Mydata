@@ -35,6 +35,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.auth.AuthState
+import com.example.data.sync.SyncOutcome
+import com.example.data.sync.SyncStatus
 import com.example.ui.theme.AppColors
 
 @Composable
@@ -42,6 +44,11 @@ fun SettingsPage(
     authState: AuthState,
     onOpenAuthDialog: () -> Unit,
     onSignOut: () -> Unit,
+    syncStatus: SyncStatus,
+    syncOutcome: SyncOutcome?,
+    isSyncAvailable: Boolean,
+    onSync: () -> Unit,
+    onDismissSyncFeedback: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
@@ -114,7 +121,7 @@ fun SettingsPage(
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "Session Supabase active (mise en cache locale)",
+                                text = "Session Supabase active — synchronisation disponible",
                                 fontSize = 11.sp,
                                 color = AppColors.SuccessGreen
                             )
@@ -143,7 +150,7 @@ fun SettingsPage(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Vous utilisez l'application en mode 100% hors-ligne. Vous pouvez vous connecter à votre compte Supabase pour authentifier votre session.",
+                            text = "Vous utilisez l'application en mode 100% hors-ligne. Connectez-vous pour authentifier votre session et activer la synchronisation entre appareils.",
                             fontSize = 12.sp,
                             color = AppColors.TextSecondary
                         )
@@ -166,6 +173,17 @@ fun SettingsPage(
                     }
                 }
             }
+        }
+
+        // Sync Section (v1.1.0)
+        if (isSyncAvailable) {
+            SyncSection(
+                authState = authState,
+                syncStatus = syncStatus,
+                lastOutcome = syncOutcome,
+                onSync = onSync,
+                onDismissFeedback = onDismissSyncFeedback
+            )
         }
 
         // About Card
@@ -197,7 +215,7 @@ fun SettingsPage(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = "Version 1.0.1 — Application de bases de données et tableaux personnalisés offline-first, inspirée de Notion avec thème sombre VS Code.",
+                    text = "Version 1.1.0 — Application de bases de données et tableaux personnalisés offline-first, avec synchronisation cloud des données pour les appareils connectés.",
                     fontSize = 12.sp,
                     color = AppColors.TextSecondary,
                     lineHeight = 17.sp

@@ -24,5 +24,8 @@ data class PropertyEntity(
     val name: String,
     val kind: String, // "text" | "number" | "date" | "select"
     @ColumnInfo(name = "options_json") val optionsJson: String = "[]",
-    @ColumnInfo(name = "sort_order") val sortOrder: Int = 0
+    @ColumnInfo(name = "sort_order") val sortOrder: Int = 0,
+    @ColumnInfo(name = "updated_at") val updatedAt: Long = System.currentTimeMillis(),
+    @ColumnInfo(name = "deleted_at") val deletedAt: Long? = null,
+    @ColumnInfo(name = "user_id") val userId: String? = null
 )

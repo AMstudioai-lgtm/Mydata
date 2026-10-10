@@ -72,6 +72,8 @@ import com.example.ui.auth.AuthButton
 import com.example.ui.auth.AuthDialog
 import com.example.ui.journal.JournalPage
 import com.example.ui.journal.RowDetailPage
+import com.example.data.sync.SyncOutcome
+import com.example.data.sync.SyncStatus
 import com.example.ui.settings.SettingsPage
 import com.example.ui.theme.AppColors
 import kotlinx.coroutines.launch
@@ -103,7 +105,12 @@ fun Shell(
     onDeleteRow: (rowId: String) -> Unit,
     onSignIn: (String, String) -> Unit,
     onSignUp: (String, String) -> Unit,
-    onSignOut: () -> Unit
+    onSignOut: () -> Unit,
+    syncStatus: SyncStatus,
+    syncOutcome: SyncOutcome?,
+    isSyncAvailable: Boolean,
+    onSync: () -> Unit,
+    onDismissSyncFeedback: () -> Unit
 ) {
     var currentPageIndex by remember { mutableIntStateOf(0) } // 0 = Journal, 1 = Settings
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -447,7 +454,12 @@ fun Shell(
                     SettingsPage(
                         authState = authState,
                         onOpenAuthDialog = { showAuthDialog = true },
-                        onSignOut = onSignOut
+                        onSignOut = onSignOut,
+                        syncStatus = syncStatus,
+                        syncOutcome = syncOutcome,
+                        isSyncAvailable = isSyncAvailable,
+                        onSync = onSync,
+                        onDismissSyncFeedback = onDismissSyncFeedback
                     )
                 }
             }
