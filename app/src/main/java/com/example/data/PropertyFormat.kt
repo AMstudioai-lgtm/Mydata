@@ -1,5 +1,7 @@
 package com.example.data
 
+import java.util.Locale
+
 /**
  * Sous-format des propriétés de type `number`. Le type reste `number` : seul l'affichage change.
  * `null` équivaut à [FORMAT_PLAIN] (comportement historique avant la migration 2 -> 3).
