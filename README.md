@@ -15,7 +15,7 @@ Vos données sont stockées sur votre appareil et restent accessibles sans conne
 ### 1. Créer une table
 
 Ouvrez le menu latéral (icône ☰ en haut à gauche), puis appuyez sur le **+** de la
-section « Journal ». La nouvelle table s'appelle « Database N » et s'ouvre aussitôt.
+section « database ». La nouvelle table s'appelle « Database N » et s'ouvre aussitôt.
 
 Vous pouvez aussi appuyer sur **Créer une database** depuis l'écran d'accueil si aucune
 table n'existe encore.
