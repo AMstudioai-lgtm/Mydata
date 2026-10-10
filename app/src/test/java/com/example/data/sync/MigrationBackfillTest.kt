@@ -3,14 +3,13 @@ package com.example.data.sync
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
 
 /**
  * Vérifie que la migration rétro-remplit updated_at de façon à ce que les données créées
  * avant la v1.1.0 soient bien envoyées au premier envoi.
+ *
+ * Test en JUnit pur : la règle ne dépend pas d'Android, inutile de payer le coût de Robolectric.
  */
-@RunWith(RobolectricTestRunner::class)
 class MigrationBackfillTest {
 
     @Test
