@@ -6,10 +6,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 
+// Le SDK réellement exécuté est défini dans app/src/test/resources/robolectric.properties.
+// L'API 36 exige Java 21, incompatible avec le JDK 17 utilisé par la CI et le build release.
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
 class ExampleRobolectricTest {
 
   @Test
