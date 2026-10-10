@@ -3,13 +3,18 @@ name: Android Release
 on:
   push:
     branches: [main]
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Compiler sans publier de release"
+        type: boolean
+        default: false
 
-# Le token par defaut doit pouvoir pousser des tags et publier des releases.
+# Le token par défaut doit pouvoir pousser des tags et publier des releases.
 permissions:
   contents: write
 
-# Serialise les builds : deux pushes rapproches ne creent jamais deux fois la meme version.
+# Sérialise les builds : deux pushes rapprochés ne créent jamais deux fois la même version.
 concurrency:
   group: android-release-main
   cancel-in-progress: false
@@ -22,10 +27,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0 # historique + tags, nécessaires au bump de version
 
       - name: JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
@@ -33,57 +38,65 @@ jobs:
       - name: Android SDK
         uses: android-actions/setup-android@v3
         with:
-          # On evite le paquet "tools" (supprime du depot Google) qui fait echouer l action.
+          # Le paquet "tools" a été retiré du dépôt Google : sa demande fait échouer l'action.
           packages: ""
-          log-accepted-licenses: false
 
-      # La plateforme 36.1 (minorApiLevel) et les build-tools sont absents du runner :
-      # AGP les telecharge de lui-meme, on anticipe ici pour gagner un cycle.
+      # La plateforme 36.1 (compileSdk minorApiLevel) est absente du runner :
+      # AGP la télécharge de lui-même, on anticipe ici pour gagner un cycle.
       - name: Installer les composants SDK
         run: |
           set -euo pipefail
           SDKMANAGER="sdkmanager"
           command -v sdkmanager >/dev/null 2>&1 || SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           for p in "platform-tools" "platforms;android-36" "platforms;android-36.1"; do
-            "$SDKMANAGER" "$p" || echo "::notice::$p indisponible, AGP completera au build"
+            "$SDKMANAGER" "$p" || echo "::notice::$p indisponible, AGP complètera au build"
           done
 
-      # Le depot n a pas de gradlew versionne : on installe la version attendue par le projet.
+      # Le dépôt n'a pas de gradlew versionné : on installe la version attendue par le projet.
       - name: Gradle 9.3.1
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 9.3.1
 
-      - name: Determiner la version
+      - name: Déterminer la version
         id: version
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
         run: |
           set -euo pipefail
           CURRENT=$(grep -oP "(?<=versionName = \")[^\"]+" app/build.gradle.kts)
           CURRENT_CODE=$(grep -oP "(?<=versionCode = )[0-9]+" app/build.gradle.kts)
           git fetch --tags --force
+
           if git rev-parse -q --verify "refs/tags/v$CURRENT" >/dev/null; then
-            # Version deja publiee : incremente le patch et pousse le bump.
+            # Version déjà publiée : incrémente le patch et pousse le bump.
             MAJOR=${CURRENT%%.*}
             REST=${CURRENT#*.}
             MINOR=${REST%%.*}
             PATCH=${REST#*.}
             VERSION="$MAJOR.$MINOR.$((PATCH + 1))"
             CODE=$((CURRENT_CODE + 1))
+
             sed -i -E -e "s/versionCode = [0-9]+/versionCode = $CODE/" -e "s/versionName = \"[^\"]*\"/versionName = \"$VERSION\"/" app/build.gradle.kts
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git commit -am "chore: bump version $VERSION [skip ci]"
-            git push origin HEAD:main
+
+            # En dry run on ne touche pas au dépôt : le bump est seulement affiché.
+            if [ "$DRY_RUN" != "true" ]; then
+              git config user.name "github-actions[bot]"
+              git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+              git commit -am "chore: bump version $VERSION [skip ci]"
+              git push origin HEAD:main
+            fi
           else
             VERSION="$CURRENT"
             CODE="$CURRENT_CODE"
           fi
+
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "code=$CODE" >> "$GITHUB_OUTPUT"
           echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          echo "Version publiee : $VERSION (code $CODE)"
+          echo "Version : $VERSION (code $CODE)"
 
-      - name: Preparer la signature
+      - name: Préparer la signature
         env:
           KEYSTORE_B64: ${{ secrets.KEYSTORE_BASE64 }}
           STORE_PW: ${{ secrets.STORE_PASSWORD }}
@@ -91,15 +104,15 @@ jobs:
         run: |
           set -euo pipefail
           if [ -n "$KEYSTORE_B64" ]; then
-            # Option recommandee : keystore stable fourni dans les secrets du depot.
+            # Option recommandée : keystore stable fourni dans les secrets du dépôt.
             echo "$KEYSTORE_B64" | base64 -d > "$GITHUB_WORKSPACE/release.jks"
             echo "KEYSTORE_PATH=$GITHUB_WORKSPACE/release.jks" >> "$GITHUB_ENV"
             echo "STORE_PASSWORD=$STORE_PW" >> "$GITHUB_ENV"
             echo "KEY_PASSWORD=$KEY_PW" >> "$GITHUB_ENV"
             echo "SIGNING=stable" >> "$GITHUB_ENV"
           else
-            # Repli : cle jetable generee a chaque run. APK installable mais signature
-            # changeante : les utilisateurs devront desinstaller pour mettre a jour.
+            # Repli : clé jetable générée à chaque run. APK installable mais signature
+            # changeante : les utilisateurs devront désinstaller pour mettre à jour.
             keytool -genkeypair -v -keystore "$GITHUB_WORKSPACE/ci.jks" -alias upload -storetype PKCS12 -keyalg RSA -keysize 2048 -validity 9125 -storepass ci-ci-ci -keypass ci-ci-ci -dname "CN=Mydata CI, OU=Build, O=Mydata, C=FR"
             echo "KEYSTORE_PATH=$GITHUB_WORKSPACE/ci.jks" >> "$GITHUB_ENV"
             echo "STORE_PASSWORD=ci-ci-ci" >> "$GITHUB_ENV"
@@ -107,10 +120,10 @@ jobs:
             echo "SIGNING=ephemeral" >> "$GITHUB_ENV"
           fi
 
-      - name: Compiler l APK release
+      - name: Compiler l'APK release
         run: gradle :app:assembleRelease --no-daemon --stacktrace
 
-      - name: Renommer l APK
+      - name: Renommer l'APK
         run: |
           set -euo pipefail
           V="${{ steps.version.outputs.version }}"
@@ -124,16 +137,17 @@ jobs:
           if [ -n "$PREV" ]; then
             git log --pretty=format:"- %s" "$PREV"..HEAD | sed "/^$/d" > changelog.md
           else
-            echo "- Premiere release publiee" > changelog.md
+            echo "- Première release publiée" > changelog.md
           fi
           if [ "$SIGNING" = "ephemeral" ]; then
             echo "" >> changelog.md
             echo "> [!WARNING]" >> changelog.md
-            echo "> Build signe avec une cle jetable generee par le CI. La signature change" >> changelog.md
-            echo "> a chaque release : desinstaller l ancienne version avant d installer." >> changelog.md
+            echo "> Build signé avec une clé jetable générée par le CI. La signature change" >> changelog.md
+            echo "> à chaque release : désinstaller l'ancienne version avant d'installer." >> changelog.md
           fi
 
       - name: Publier la release
+        if: ${{ inputs.dry_run != true }}
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
