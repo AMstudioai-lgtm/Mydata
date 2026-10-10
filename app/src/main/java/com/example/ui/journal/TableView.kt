@@ -428,7 +428,7 @@ fun TableView(
                                         }
                                     }
 
-                                    // Primary Column Mini Pencil Button to open row page (Notion style)
+                                    // Primary Column Mini Pencil Button to open row page
                                     if (isFirst) {
                                         IconButton(
                                             onClick = { onOpenRow(row) },

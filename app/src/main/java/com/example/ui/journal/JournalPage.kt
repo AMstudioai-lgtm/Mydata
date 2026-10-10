@@ -111,7 +111,7 @@ fun JournalPage(
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
-                    text = "Crée ta première base de données dynamique style Notion pour gérer et analyser toutes tes données.",
+                    text = "Crée ta première base de données dynamique pour gérer et analyser toutes tes données.",
                     fontSize = 13.sp,
                     color = AppColors.TextSecondary,
                     textAlign = TextAlign.Center,

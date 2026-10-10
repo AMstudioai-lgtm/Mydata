@@ -2,7 +2,7 @@
 
 ## Description
 Application Android de bases de donnees dynamiques et tableaux personnalises,
-offline-first (style Notion / VS Code dark). Kotlin + Jetpack Compose + Room.
+offline-first, avec synchronisation cloud. Kotlin + Jetpack Compose + Room.
 
 Depot : https://github.com/AMstudioai-lgtm/Mydata (public)
 

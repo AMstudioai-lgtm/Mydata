@@ -269,7 +269,7 @@ fun Shell(
                                         .padding(start = 24.dp, end = 12.dp, top = 2.dp, bottom = 2.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    // Vertical indentation guide line (VS Code / Notion tree view line)
+                                    // Vertical indentation guide line
                                     Box(
                                         modifier = Modifier
                                             .width(2.dp)
