@@ -15,6 +15,9 @@ interface EntryRowDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(row: EntryRowEntity)
 
+    @Query("UPDATE entry_rows SET user_id = :userId WHERE user_id IS NULL AND deleted_at IS NULL")
+    suspend fun adoptOrphans(userId: String): Int
+
     @Query("SELECT * FROM entry_rows WHERE id = :id")
     suspend fun getById(id: String): EntryRowEntity?
 

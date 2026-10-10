@@ -6,9 +6,11 @@ import com.example.data.db.AppDatabase
 import com.example.data.db.entity.EntryRowEntity
 import com.example.data.db.entity.JournalEntity
 import com.example.data.db.entity.PropertyEntity
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
 /** Tables synchronisées, dans l'ordre imposé par les clés étrangères. */
@@ -155,21 +157,21 @@ class SyncRepository(
         // Une ligne distante plus ancienne que la locale perd : la décision est prise par
         // comparaison stricte, jamais par écrasement systématique.
         if (local != null && !ConflictResolver.remoteWins(local.updatedAt, row.optLong("updated_at"))) return 0
-        journalDao.upsert(JournalEntity.fromJson(row))
+        journalDao.upsert(journalFromJson(row))
         return 1
     }
 
     private suspend fun applyProperty(row: JSONObject): Int {
         val local = propertyDao.getById(row.getString("id"))
         if (local != null && !ConflictResolver.remoteWins(local.updatedAt, row.optLong("updated_at"))) return 0
-        propertyDao.upsert(PropertyEntity.fromJson(row))
+        propertyDao.upsert(propertyFromJson(row))
         return 1
     }
 
     private suspend fun applyEntryRow(row: JSONObject): Int {
         val existing = entryRowDao.getById(row.getString("id"))
         if (existing != null && !ConflictResolver.remoteWins(existing.updatedAt, row.optLong("updated_at"))) return 0
-        entryRowDao.upsert(EntryRowEntity.fromJson(row))
+        entryRowDao.upsert(entryRowFromJson(row))
         return 1
     }
 

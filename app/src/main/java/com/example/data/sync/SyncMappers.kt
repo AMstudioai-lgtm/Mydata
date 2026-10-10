@@ -41,7 +41,9 @@ fun EntryRowEntity.toJson(now: () -> Long): JSONObject = JSONObject().apply {
     put("user_id", userId ?: JSONObject.NULL)
 }
 
-fun JournalEntity.Companion.fromJson(row: JSONObject): JournalEntity = JournalEntity(
+/** Désérialisation d'une ligne PostgREST. `fromJson` est exposé en fonction libre car une
+ * extension sur le Companion d'une autre classe n'est pas résolue depuis ce module. */
+fun journalFromJson(row: JSONObject): JournalEntity = JournalEntity(
     id = row.getString("id"),
     name = row.getString("name"),
     createdAt = row.optLong("created_at", 0L),
@@ -50,7 +52,7 @@ fun JournalEntity.Companion.fromJson(row: JSONObject): JournalEntity = JournalEn
     userId = row.optString("user_id").takeIf { !row.isNull("user_id") && it.isNotBlank() }
 )
 
-fun PropertyEntity.Companion.fromJson(row: JSONObject): PropertyEntity = PropertyEntity(
+fun propertyFromJson(row: JSONObject): PropertyEntity = PropertyEntity(
     id = row.getString("id"),
     journalId = row.getString("journal_id"),
     name = row.getString("name"),
@@ -62,7 +64,7 @@ fun PropertyEntity.Companion.fromJson(row: JSONObject): PropertyEntity = Propert
     userId = row.optString("user_id").takeIf { !row.isNull("user_id") && it.isNotBlank() }
 )
 
-fun EntryRowEntity.Companion.fromJson(row: JSONObject): EntryRowEntity = EntryRowEntity(
+fun entryRowFromJson(row: JSONObject): EntryRowEntity = EntryRowEntity(
     id = row.getString("id"),
     journalId = row.getString("journal_id"),
     valuesJson = row.optString("values_json", "{}"),

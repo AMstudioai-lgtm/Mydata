@@ -11,6 +11,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.data.auth.AuthState
 import com.example.ui.shell.Shell
 import com.example.ui.theme.AppTheme
 import com.example.viewmodel.AuthViewModel
