@@ -30,10 +30,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.DropdownMenu
@@ -43,6 +45,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -50,59 +53,34 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
+import com.example.data.images.RowImage
 import com.example.ui.theme.AppColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.util.UUID
-
-/**
- * Clés réservées de `valuesJson`, à côté des valeurs de propriétés.
- *
- * Aucun risque de collision : les valeurs de propriétés sont stockées sous l'UUID de la
- * propriété, jamais sous son nom. Le préfixe `__` est donc réservé à l'application, et
- * ces clés n'apparaissent jamais comme une valeur de cellule (tableau, écran d'édition,
- * pied de tableau ni synchronisation, qui ne parcourent que les propriétés).
- */
-const val IMAGES_KEY = "__images__"
 
 /** Zone de saisie libre d'une ligne, héritière de l'ancien bloc de notes. */
 const val NOTES_KEY = "__notes__"
 
 /** Clé notes utilisée avant la suppression du bloc dédié (v1.2.0). */
 const val LEGACY_NOTES_KEY = "_page_notes"
-
-/** Lit la liste des URI d'images stockée dans `valuesJson`, sans jamais lever. */
-fun readImageUris(valuesJson: String): List<String> {
-    return try {
-        val obj = JSONObject(valuesJson)
-        when (val raw = obj.opt(IMAGES_KEY)) {
-            is JSONArray -> (0 until raw.length()).mapNotNull { index ->
-                raw.optString(index, "").ifEmpty { null }
-            }
-            // Tolère une valeur stockée en chaîne JSON (écriture ancienne ou double encodage).
-            is String -> parseUriArrayString(raw)
-            else -> emptyList()
-        }
-    } catch (_: Exception) {
-        emptyList()
-    }
-}
-
-/** Images au format attendu par `EntryRowEntity.valuesJson`. */
-fun imageUrisJson(uris: List<String>): JSONArray = JSONArray().apply { uris.forEach { put(it) } }
 
 /** Texte libre de la ligne. Les anciennes notes `_page_notes` sont relues tant qu'elles existent. */
 fun readNotes(valuesJson: String): String {
@@ -114,16 +92,6 @@ fun readNotes(valuesJson: String): String {
         }
     } catch (_: Exception) {
         ""
-    }
-}
-
-private fun parseUriArrayString(raw: String): List<String> {
-    return try {
-        val array = JSONArray(raw)
-        (0 until array.length()).mapNotNull { index -> array.optString(index, "").ifEmpty { null } }
-    } catch (_: Exception) {
-        // Dernier repli : anciennes notes écrites en texte brut, une URI par ligne.
-        raw.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
     }
 }
 
@@ -143,7 +111,7 @@ private object RowImageStore {
     /** Plus grand côté conservé à l'import, en pixels : au-delà, le fichier est rééchantillonné. */
     private const val IMPORT_MAX_PX = 1600
 
-    /** Plus grand côté des vignettes affichées en grille, en pixels. */
+    /** Plus grand côté des vignettes affichées, en pixels. */
     private const val THUMBNAIL_MAX_PX = 640
 
     private val thumbnails = object : LruCache<String, Bitmap>(4 * 1024 * 1024) {
@@ -250,13 +218,14 @@ private object RowImageStore {
 }
 
 /**
- * Section images d'une ligne, enchaînement Notion : zone d'ajout discrète puis grille
- * en deux colonnes, chaque vignette portant sa croix de suppression.
+ * Section images d'une ligne, enchaînement Notion : zone d'ajout discrète puis images
+ * empilées verticalement, chacune en pleine largeur avec sa légende et sa croix.
+ * Les nouvelles images s'ajoutent en dessous des précédentes.
  */
 @Composable
 fun RowImagesSection(
-    images: List<String>,
-    onImagesChanged: (List<String>) -> Unit,
+    images: List<RowImage>,
+    onImagesChanged: (List<RowImage>) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -271,7 +240,7 @@ fun RowImagesSection(
         if (picked.isNotEmpty()) {
             scope.launch {
                 val imported = picked.mapNotNull { uri -> RowImageStore.importImage(context, uri) }
-                if (imported.isNotEmpty()) onImagesChanged(images + imported)
+                if (imported.isNotEmpty()) onImagesChanged(images + imported.map { RowImage(uri = it) })
             }
         }
     }
@@ -283,7 +252,7 @@ fun RowImagesSection(
         val file = pendingCaptureFile
         pendingCaptureFile = null
         if (success && file != null && file.exists()) {
-            onImagesChanged(images + Uri.fromFile(file).toString())
+            onImagesChanged(images + RowImage(uri = Uri.fromFile(file).toString()))
         } else {
             file?.delete()
         }
@@ -345,26 +314,33 @@ fun RowImagesSection(
             }
         }
 
-        // Grille 2 colonnes. Pas de LazyVerticalGrid : la page est déjà scrollable, et deux
-        // scrolls verticaux imbriqués sont interdits.
-        images.chunked(2).forEachIndexed { rowIndex, pair ->
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                pair.forEachIndexed { columnIndex, uri ->
-                    val index = rowIndex * 2 + columnIndex
-                    Box(modifier = Modifier.weight(1f).aspectRatio(1f)) {
-                        ImageThumbnail(uri = uri, modifier = Modifier.fillMaxSize())
+        // Pile verticale pleine largeur. Pas de LazyColumn : la page est déjà scrollable,
+        // et deux scrolls verticaux imbriqués sont interdits.
+        images.forEachIndexed { index, image ->
+            key(image.uri ?: image.remote ?: index) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(16f / 9f)
+                    ) {
+                        when {
+                            image.uri != null -> ImageThumbnail(
+                                uri = image.uri,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                            image.remote != null -> CloudPlaceholder(modifier = Modifier.fillMaxSize())
+                            else -> UnavailablePlaceholder(modifier = Modifier.fillMaxSize())
+                        }
 
                         // Croix de suppression, dans un badge sombre pour rester lisible
                         // quelle que soit l'image derrière.
                         Box(
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
-                                .padding(5.dp)
-                                .size(22.dp)
+                                .padding(8.dp)
+                                .size(24.dp)
                                 .background(AppColors.Background.copy(alpha = 0.8f), CircleShape)
                                 .clickable {
                                     onImagesChanged(images.filterIndexed { i, _ -> i != index })
@@ -376,12 +352,24 @@ fun RowImagesSection(
                                 imageVector = Icons.Default.Close,
                                 contentDescription = "Supprimer l'image",
                                 tint = AppColors.TextPrimary,
-                                modifier = Modifier.size(13.dp)
+                                modifier = Modifier.size(14.dp)
                             )
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+                    CaptionField(
+                        caption = image.caption,
+                        index = index,
+                        onCaptionChanged = { newCaption ->
+                            onImagesChanged(
+                                images.mapIndexed { i, item ->
+                                    if (i == index) item.copy(caption = newCaption) else item
+                                }
+                            )
+                        }
+                    )
                 }
-                if (pair.size == 1) Spacer(modifier = Modifier.weight(1f))
             }
         }
     }
@@ -428,7 +416,58 @@ private fun AddImageZone(onClick: () -> Unit, label: String, modifier: Modifier 
     }
 }
 
-/** Vignette d'une image, chargée puis recadrée. Placeholder si l'image n'est plus lisible. */
+/**
+ * Champ de légende sous une image. Buffer local comme le titre : la légende est réécrite
+ * en base à chaque frappe, donc la value reviendrait à la fin et le curseur sauterait
+ * sans ce buffer. Resynchronisé depuis le store quand le champ n'a pas le focus
+ * (suppression, réouverture, sync).
+ */
+@Composable
+private fun CaptionField(
+    caption: String,
+    index: Int,
+    onCaptionChanged: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var buffer by remember { mutableStateOf(TextFieldValue(caption, TextRange(caption.length))) }
+    var isFocused by remember { mutableStateOf(false) }
+    if (!isFocused && buffer.text != caption) {
+        buffer = TextFieldValue(caption, TextRange(caption.length))
+    }
+
+    BasicTextField(
+        value = buffer,
+        onValueChange = { newValue ->
+            buffer = newValue
+            onCaptionChanged(newValue.text)
+        },
+        textStyle = TextStyle(
+            color = AppColors.TextSecondary,
+            fontSize = 13.sp
+        ),
+        cursorBrush = SolidColor(AppColors.Accent),
+        singleLine = false,
+        modifier = modifier
+            .fillMaxWidth()
+            .background(AppColors.Panel, RoundedCornerShape(6.dp))
+            .border(1.dp, AppColors.Border, RoundedCornerShape(6.dp))
+            .padding(horizontal = 10.dp, vertical = 8.dp)
+            .onFocusChanged { isFocused = it.isFocused }
+            .testTag("row_image_caption_${index}"),
+        decorationBox = { innerTextField ->
+            if (buffer.text.isEmpty()) {
+                Text(
+                    text = "Légende…",
+                    color = AppColors.TextMuted,
+                    fontSize = 13.sp
+                )
+            }
+            innerTextField()
+        }
+    )
+}
+
+/** Vignette d'une image locale, chargée puis recadrée. Placeholder si illisible. */
 @Composable
 private fun ImageThumbnail(uri: String, modifier: Modifier = Modifier) {
     val context = LocalContext.current
@@ -436,40 +475,80 @@ private fun ImageThumbnail(uri: String, modifier: Modifier = Modifier) {
         value = RowImageStore.loadThumbnail(context, uri)
     }
 
-    Box(
-        modifier = modifier
-            .background(AppColors.Background, RoundedCornerShape(8.dp))
-            .border(1.dp, AppColors.Border, RoundedCornerShape(8.dp)),
-        contentAlignment = Alignment.Center
-    ) {
-        val loaded = bitmap
-        if (loaded != null) {
+    val loaded = bitmap
+    if (loaded != null) {
+        Box(
+            modifier = modifier
+                .background(AppColors.Background, RoundedCornerShape(8.dp))
+                .border(1.dp, AppColors.Border, RoundedCornerShape(8.dp)),
+            contentAlignment = Alignment.Center
+        ) {
             Image(
                 bitmap = loaded.asImageBitmap(),
                 contentDescription = "Image de la ligne",
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
             )
-        } else {
-            // Image supprimée de l'appareil ou devenue inaccessible : pas de plantage,
-            // un simple emplacement discret à la place.
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(8.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.BrokenImage,
-                    contentDescription = null,
-                    tint = AppColors.TextMuted,
-                    modifier = Modifier.size(22.dp)
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Image indisponible",
-                    color = AppColors.TextMuted,
-                    fontSize = 9.sp
-                )
-            }
+        }
+    } else {
+        UnavailablePlaceholder(modifier = modifier)
+    }
+}
+
+/** Image téléversée dont le fichier local est absent : le téléchargement viendra d'un autre chantier. */
+@Composable
+private fun CloudPlaceholder(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .background(AppColors.Background, RoundedCornerShape(8.dp))
+            .border(1.dp, AppColors.Border, RoundedCornerShape(8.dp)),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(8.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.CloudOff,
+                contentDescription = null,
+                tint = AppColors.TextMuted,
+                modifier = Modifier.size(22.dp)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Image cloud",
+                color = AppColors.TextMuted,
+                fontSize = 11.sp
+            )
+        }
+    }
+}
+
+/** Image locale devenue inaccessible : pas de plantage, un simple emplacement discret. */
+@Composable
+private fun UnavailablePlaceholder(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .background(AppColors.Background, RoundedCornerShape(8.dp))
+            .border(1.dp, AppColors.Border, RoundedCornerShape(8.dp)),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(8.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.BrokenImage,
+                contentDescription = null,
+                tint = AppColors.TextMuted,
+                modifier = Modifier.size(22.dp)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Image indisponible",
+                color = AppColors.TextMuted,
+                fontSize = 11.sp
+            )
         }
     }
 }
