@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.Notes
 import androidx.compose.material.icons.filled.Numbers
 import androidx.compose.material.icons.filled.TextFields
@@ -89,8 +90,8 @@ fun RowDetailPage(
         rowValues.optString(primaryProperty.id, "")
     } else ""
 
-    val imageUris = readImageUris(row.valuesJson)
-    val notesValue = readNotes(row.valuesJson)
+    val imageUris = remember(row.valuesJson) { readImageUris(row.valuesJson) }
+    val notesValue = remember(row.valuesJson) { readNotes(row.valuesJson) }
 
     // Titre : buffer local comme dans les cellules du tableau. Le champ est réécrit en base
     // à chaque frappe (le tableau doit suivre en direct), donc la value reviendrait à
@@ -101,6 +102,12 @@ fun RowDetailPage(
     var isTitleFocused by remember { mutableStateOf(false) }
     if (!isTitleFocused && titleBuffer.text != primaryValue) {
         titleBuffer = TextFieldValue(primaryValue, TextRange(primaryValue.length))
+    }
+
+    // Migration de l'ancien bloc de notes : dès que la zone libre est modifiée, la note
+    // héritée est recopiée sous la clé réservée et l'ancienne clé est retirée.
+    var legacyNotesCleared by remember(row.valuesJson) {
+        mutableStateOf(!rowValues.has(LEGACY_NOTES_KEY))
     }
 
     var notesBuffer by remember {
@@ -406,6 +413,10 @@ fun RowDetailPage(
                 value = notesBuffer,
                 onValueChange = { newValue ->
                     notesBuffer = newValue
+                    if (!legacyNotesCleared) {
+                        legacyNotesCleared = true
+                        onUpdateCell(row.id, LEGACY_NOTES_KEY, null)
+                    }
                     onUpdateCell(row.id, NOTES_KEY, newValue.text)
                 },
                 textStyle = TextStyle(

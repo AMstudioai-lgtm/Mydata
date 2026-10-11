@@ -202,17 +202,34 @@ private object RowImageStore {
         }
     }
 
+    /**
+     * Réduit le plus grand côté à [maxPx]. Écriture atomique : le résultat part dans un
+     * fichier temporaire qui remplace l'original seulement si l'encodage a réussi, sinon
+     * une image corrompue resterait à la place de l'original.
+     */
     private fun downscale(file: File, maxPx: Int) {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(file.path, bounds)
         val longest = maxOf(bounds.outWidth, bounds.outHeight)
         if (longest <= maxPx || longest <= 0) return
+
         val options = BitmapFactory.Options().apply {
-            inSampleSize = Integer.highestOneBit(longest / maxPx).coerceAtLeast(1)
+            // Puissance de deux la plus proche par valeur inférieure : 3200 -> 800 (maxPx 1600).
+            var sample = 1
+            while (longest / (sample * 2) >= maxPx) sample *= 2
+            inSampleSize = sample
         }
         val bitmap = BitmapFactory.decodeFile(file.path, options) ?: return
+
+        val temp = File(file.parentFile, "${file.name}.tmp")
         try {
-            FileOutputStream(file).use { out -> bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out) }
+            val compressed = FileOutputStream(temp).use { out ->
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
+            }
+            if (compressed && file.delete() && temp.renameTo(file)) {
+                return
+            }
+            temp.delete()
         } finally {
             bitmap.recycle()
         }
@@ -224,7 +241,9 @@ private object RowImageStore {
         val longest = maxOf(bounds.outWidth, bounds.outHeight)
         if (longest <= 0) return null
         val options = BitmapFactory.Options().apply {
-            inSampleSize = Integer.highestOneBit(longest / maxPx).coerceAtLeast(1)
+            var sample = 1
+            while (longest / (sample * 2) >= maxPx) sample *= 2
+            inSampleSize = sample
         }
         return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
     }
