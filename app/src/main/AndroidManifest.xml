@@ -3,6 +3,16 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!--
+        Aucune permission de lecture média n'est nécessaire (READ_MEDIA_IMAGES ni
+        READ_EXTERNAL_STORAGE) : les images passent uniquement par le sélecteur système
+        (PickVisualMedia) qui accorde un accès ponctuel, puis sont copiées dans le
+        stockage interne de l'application. L'appareil photo reçoit un accès limité via
+        FileProvider (FLAG_GRANT_WRITE_URI_PERMISSION).
+    -->
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
 
     <application
         android:name=".MyApp"
@@ -25,6 +35,20 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+            Partage des photos prises avec l'appareil photo. Authority adaptée à l'applicationId
+            (voir RowImageStore.captureUri) ; le chemin est limité à files/row_images.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 
 </manifest>

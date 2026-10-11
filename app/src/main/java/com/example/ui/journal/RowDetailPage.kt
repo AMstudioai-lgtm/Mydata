@@ -4,7 +4,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -22,21 +22,18 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.FormatListBulleted
+import androidx.compose.material.icons.filled.Notes
 import androidx.compose.material.icons.filled.Numbers
 import androidx.compose.material.icons.filled.TextFields
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -49,10 +46,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.db.entity.EntryRowEntity
@@ -90,9 +90,33 @@ fun RowDetailPage(
         rowValues.optString(primaryProperty.id, "")
     } else ""
 
-    val notesValue = if (rowValues.has("_page_notes")) {
-        rowValues.optString("_page_notes", "")
-    } else ""
+    val imageUris = remember(row.valuesJson) { readImageUris(row.valuesJson) }
+    val notesValue = remember(row.valuesJson) { readNotes(row.valuesJson) }
+
+    // Titre : buffer local comme dans les cellules du tableau. Le champ est réécrit en base
+    // à chaque frappe (le tableau doit suivre en direct), donc la value reviendrait à
+    // TextRange(0) et la première lettre se collerait à droite du curseur sans ce buffer.
+    var titleBuffer by remember {
+        mutableStateOf(TextFieldValue(primaryValue, TextRange(primaryValue.length)))
+    }
+    var isTitleFocused by remember { mutableStateOf(false) }
+    if (!isTitleFocused && titleBuffer.text != primaryValue) {
+        titleBuffer = TextFieldValue(primaryValue, TextRange(primaryValue.length))
+    }
+
+    // Migration de l'ancien bloc de notes : dès que la zone libre est modifiée, la note
+    // héritée est recopiée sous la clé réservée et l'ancienne clé est retirée.
+    var legacyNotesCleared by remember(row.valuesJson) {
+        mutableStateOf(!rowValues.has(LEGACY_NOTES_KEY))
+    }
+
+    var notesBuffer by remember {
+        mutableStateOf(TextFieldValue(notesValue, TextRange(notesValue.length)))
+    }
+    var isNotesFocused by remember { mutableStateOf(false) }
+    if (!isNotesFocused && notesBuffer.text != notesValue) {
+        notesBuffer = TextFieldValue(notesValue, TextRange(notesValue.length))
+    }
 
     val formattedCreatedDate = remember(row.createdAt) {
         SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()).format(Date(row.createdAt))
@@ -178,9 +202,10 @@ fun RowDetailPage(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 BasicTextField(
-                    value = primaryValue,
+                    value = titleBuffer,
                     onValueChange = { newValue ->
-                        onUpdateCell(row.id, primaryProperty.id, newValue)
+                        titleBuffer = newValue
+                        onUpdateCell(row.id, primaryProperty.id, newValue.text)
                     },
                     textStyle = TextStyle(
                         color = AppColors.TextPrimary,
@@ -190,9 +215,10 @@ fun RowDetailPage(
                     cursorBrush = SolidColor(AppColors.Accent),
                     modifier = Modifier
                         .fillMaxWidth()
+                        .onFocusChanged { isTitleFocused = it.isFocused }
                         .testTag("row_detail_title_input"),
                     decorationBox = { innerTextField ->
-                        if (primaryValue.isEmpty()) {
+                        if (titleBuffer.text.isEmpty()) {
                             Text(
                                 text = "Titre de l'élément…",
                                 color = AppColors.TextMuted,
@@ -322,61 +348,102 @@ fun RowDetailPage(
                 }
             }
 
+            // Images : juste après les propriétés, même logique d'enchaînement que Notion.
             Spacer(modifier = Modifier.height(24.dp))
             HorizontalDivider(color = AppColors.Border)
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Page Body: Extended Notes & Details
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    imageVector = Icons.Default.EditNote,
+                    imageVector = Icons.Default.AddPhotoAlternate,
                     contentDescription = null,
                     tint = AppColors.Accent,
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Page & Notes détaillées",
+                    text = "Images",
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = AppColors.TextPrimary
                 )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = if (imageUris.isEmpty()) {
+                        "aucune image"
+                    } else {
+                        "${imageUris.size}" + (if (imageUris.size > 1) " images" else " image")
+                    },
+                    fontSize = 11.sp,
+                    color = AppColors.TextMuted
+                )
             }
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Détaillez ici les informations complémentaires, spécifications et notes libres.",
-                fontSize = 12.sp,
-                color = AppColors.TextMuted
-            )
-
             Spacer(modifier = Modifier.height(10.dp))
 
-            OutlinedTextField(
-                value = notesValue,
-                onValueChange = { newNotes ->
-                    onUpdateCell(row.id, "_page_notes", newNotes)
+            RowImagesSection(
+                images = imageUris,
+                onImagesChanged = { updated -> onUpdateCell(row.id, IMAGES_KEY, imageUrisJson(updated)) },
+                modifier = Modifier.testTag("row_detail_images_section")
+            )
+
+            // Zone de texte libre : remplace l'ancien bloc de notes dédié. C'est l'endroit
+            // vide situé juste après les propriétés, dans le prolongement des images.
+            Spacer(modifier = Modifier.height(24.dp))
+            HorizontalDivider(color = AppColors.Border)
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Notes,
+                    contentDescription = null,
+                    tint = AppColors.AccentLight,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Espace libre",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = AppColors.TextSecondary
+                )
+            }
+            Spacer(modifier = Modifier.height(2.dp))
+
+            BasicTextField(
+                value = notesBuffer,
+                onValueChange = { newValue ->
+                    notesBuffer = newValue
+                    if (!legacyNotesCleared) {
+                        legacyNotesCleared = true
+                        onUpdateCell(row.id, LEGACY_NOTES_KEY, null)
+                    }
+                    onUpdateCell(row.id, NOTES_KEY, newValue.text)
                 },
-                placeholder = {
-                    Text(
-                        "Tapez vos notes libres ici…\n- Contexte et objectifs\n- Détails et avancement\n- Remarques et liens",
-                        color = AppColors.TextMuted,
-                        fontSize = 13.sp
-                    )
-                },
-                minLines = 8,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = AppColors.Accent,
-                    unfocusedBorderColor = AppColors.Border,
-                    focusedTextColor = AppColors.TextPrimary,
-                    unfocusedTextColor = AppColors.TextPrimary,
-                    focusedContainerColor = AppColors.Panel,
-                    unfocusedContainerColor = AppColors.Panel
+                textStyle = TextStyle(
+                    color = AppColors.TextSecondary,
+                    fontSize = 14.sp,
+                    lineHeight = 21.sp
                 ),
-                shape = RoundedCornerShape(8.dp),
+                cursorBrush = SolidColor(AppColors.Accent),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .testTag("row_detail_notes_input")
+                    .heightIn(min = 88.dp)
+                    .onFocusChanged { isNotesFocused = it.isFocused }
+                    .testTag("row_notes_input"),
+                decorationBox = { innerTextField ->
+                    if (notesBuffer.text.isEmpty()) {
+                        Text(
+                            text = "Clique ici pour écrire librement : contexte, objectifs, " +
+                                "détails, remarques…",
+                            color = AppColors.TextMuted,
+                            fontSize = 14.sp,
+                            lineHeight = 21.sp
+                        )
+                    }
+                    innerTextField()
+                }
             )
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }

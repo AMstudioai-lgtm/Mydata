@@ -25,7 +25,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -36,10 +35,12 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -57,7 +58,21 @@ fun TextCell(
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var textState by remember(value) { mutableStateOf(value) }
+    // Buffer local maîtrisant sa propre sélection.
+    //
+    // Bug d'origine : la valeur affichée était réinjectée par `value`, or celle-ci revient de
+    // Room de façon asynchrone (écriture puis réémission). À chaque aller-retour, le
+    // BasicTextField repartait avec une sélection à TextRange(0) et la première lettre tapée
+    // se retrouvait collée à droite du curseur.
+    //
+    // Règle retenue : pendant la frappe, le champ n'est PAS contrôlé par la value ; la valeur
+    // persistée ne reprend la main que champ non focus (synchro cloud, ouverture ailleurs).
+    var buffer by remember { mutableStateOf(TextFieldValue(value, TextRange(value.length))) }
+    var isFocused by remember { mutableStateOf(false) }
+
+    if (!isFocused && buffer.text != value) {
+        buffer = TextFieldValue(value, TextRange(value.length))
+    }
 
     Box(
         modifier = modifier
@@ -66,9 +81,9 @@ fun TextCell(
         contentAlignment = Alignment.CenterStart
     ) {
         BasicTextField(
-            value = textState,
-            onValueChange = {
-                textState = it
+            value = buffer,
+            onValueChange = { newValue ->
+                buffer = newValue
             },
             singleLine = true,
             textStyle = TextStyle(
@@ -79,19 +94,20 @@ fun TextCell(
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(
                 onDone = {
-                    onValueChange(textState)
+                    onValueChange(buffer.text)
                 }
             ),
             modifier = Modifier
                 .fillMaxWidth()
                 .onFocusChanged { focusState ->
-                    if (!focusState.isFocused && textState != value) {
-                        onValueChange(textState)
+                    isFocused = focusState.isFocused
+                    if (!focusState.isFocused && buffer.text != value) {
+                        onValueChange(buffer.text)
                     }
                 }
                 .testTag("text_cell_input"),
             decorationBox = { innerTextField ->
-                if (textState.isEmpty()) {
+                if (buffer.text.isEmpty()) {
                     Text(
                         text = "—",
                         color = AppColors.TextMuted,
@@ -112,7 +128,14 @@ fun NumberCell(
     // null vaut "plain" : les colonnes sans sous-format gardent l'affichage historique.
     format: String? = null
 ) {
-    var textState by remember(value) { mutableStateOf(value) }
+    // Même règle que TextCell : buffer local + synchronisation de la valeur persistée
+    // uniquement hors focus, pour que le curseur ne revienne pas à TextRange(0).
+    var buffer by remember { mutableStateOf(TextFieldValue(value, TextRange(value.length))) }
+    var isFocused by remember { mutableStateOf(false) }
+
+    if (!isFocused && buffer.text != value) {
+        buffer = TextFieldValue(value, TextRange(value.length))
+    }
 
     Box(
         modifier = modifier
@@ -135,9 +158,9 @@ fun NumberCell(
             }
 
             BasicTextField(
-                value = textState,
-                onValueChange = {
-                    textState = it
+                value = buffer,
+                onValueChange = { newValue ->
+                    buffer = newValue
                 },
                 singleLine = true,
                 textStyle = TextStyle(
@@ -152,20 +175,21 @@ fun NumberCell(
                 ),
                 keyboardActions = KeyboardActions(
                     onDone = {
-                        onValueChange(parseNumberInput(textState))
+                        onValueChange(parseNumberInput(buffer.text))
                     }
                 ),
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
                     .onFocusChanged { focusState ->
-                        if (!focusState.isFocused && textState != value) {
-                            onValueChange(parseNumberInput(textState))
+                        isFocused = focusState.isFocused
+                        if (!focusState.isFocused && buffer.text != value) {
+                            onValueChange(parseNumberInput(buffer.text))
                         }
                     }
                     .testTag("number_cell_input"),
                 decorationBox = { innerTextField ->
-                    if (textState.isEmpty()) {
+                    if (buffer.text.isEmpty()) {
                         Text(
                             text = "0.0",
                             color = AppColors.TextMuted,

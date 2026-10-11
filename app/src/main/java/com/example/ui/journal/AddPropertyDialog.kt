@@ -12,7 +12,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.Button
@@ -75,8 +77,12 @@ fun AddPropertyDialog(
             border = BorderStroke(1.dp, AppColors.Border),
             modifier = Modifier.fillMaxWidth().testTag("add_property_dialog")
         ) {
+            // Le dialogue peut dépasser la hauteur d'écran (type + format + options) : la
+            // colonne scrollable garde tous les champs accessibles.
             Column(
-                modifier = Modifier.padding(20.dp)
+                modifier = Modifier
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState())
             ) {
                 Text(
                     text = "Nouvelle propriété",
