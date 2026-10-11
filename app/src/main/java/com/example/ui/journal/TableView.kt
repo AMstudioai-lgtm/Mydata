@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -45,6 +46,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.db.entity.EntryRowEntity
@@ -68,7 +70,13 @@ fun TableView(
     onOpenRow: (EntryRowEntity) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // Un seul état de scroll horizontal, partagé par l'en-tête, le corps et le pied :
+    // les trois bandes restent alignées sur les mêmes colonnes pendant le défilement.
     val horizontalScrollState = rememberScrollState()
+
+    // Scroll vertical du corps. Les listes de lignes sont longues : il doit être fluide.
+    val verticalScrollState = rememberScrollState()
+
     val primaryColumnWidth = 160.dp
     val regularColumnWidth = 140.dp
     val actionColumnWidth = 52.dp
@@ -106,493 +114,584 @@ fun TableView(
         shape = RoundedCornerShape(8.dp)
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(horizontalScrollState)
+            modifier = Modifier.fillMaxWidth()
         ) {
-            // Header Row
-            Row(
+            // Sticky Header Row : ne défile jamais, reste visible en haut.
+            TableHeaderRow(
+                properties = properties,
+                primaryColumnWidth = primaryColumnWidth,
+                regularColumnWidth = regularColumnWidth,
+                actionColumnWidth = actionColumnWidth,
+                onDeleteProperty = onDeleteProperty,
+                onEditProperty = onEditProperty,
+                onMoveProperty = onMoveProperty,
+                onMovePropertyToFront = onMovePropertyToFront,
+                onMovePropertyToBack = onMovePropertyToBack,
+                modifier = Modifier.horizontalScroll(horizontalScrollState)
+            )
+
+            // Body : occupe tout l'espace restant et défile verticalement.
+            // Le scroll horizontal est partagé avec l'en-tête et le pied.
+            Box(
                 modifier = Modifier
-                    .background(AppColors.Panel)
-                    .height(48.dp)
-                    .border(1.dp, AppColors.Border)
+                    .weight(1f)
+                    .fillMaxWidth()
             ) {
-                properties.forEachIndexed { index, prop ->
-                    val isFirst = index == 0
-                    val isLast = index == properties.lastIndex
-                    val width = if (isFirst) primaryColumnWidth else regularColumnWidth
-                    var menuExpanded by remember { mutableStateOf(false) }
-
-                    val kindDisplay = when (prop.kind) {
-                        "text" -> "txt"
-                        "number" -> "num"
-                        "date" -> "date"
-                        "select" -> "sel"
-                        else -> prop.kind
-                    }
-
+                if (rows.isEmpty()) {
                     Box(
                         modifier = Modifier
-                            .width(width)
-                            .height(48.dp)
-                            .border(0.5.dp, AppColors.Border)
-                            .padding(horizontal = 6.dp),
-                        contentAlignment = Alignment.CenterStart
+                            .fillMaxSize()
+                            .padding(16.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            if (isFirst) {
-                                Icon(
-                                    imageVector = Icons.Default.Star,
-                                    contentDescription = "Colonne principale",
-                                    tint = AppColors.Accent,
-                                    modifier = Modifier
-                                        .size(13.dp)
-                                        .padding(end = 2.dp)
-                                )
-                            }
-
-                            Text(
-                                text = prop.name,
-                                color = AppColors.TextPrimary,
-                                fontSize = 13.sp,
-                                fontWeight = if (isFirst) FontWeight.Bold else FontWeight.SemiBold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f)
-                            )
-
-                            Spacer(modifier = Modifier.width(2.dp))
-
-                            // Kind indicator badge
-                            Surface(
-                                color = if (isFirst) AppColors.Accent.copy(alpha = 0.25f) else AppColors.SelectedBg.copy(alpha = 0.4f),
-                                shape = RoundedCornerShape(3.dp)
-                            ) {
-                                Text(
-                                    text = if (isFirst) "Principal" else kindDisplay,
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = AppColors.AccentLight,
-                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                                )
-                            }
-
-                            // Column action menu (reordering and deletion)
-                            Box {
-                                IconButton(
-                                    onClick = { menuExpanded = true },
-                                    modifier = Modifier
-                                        .size(24.dp)
-                                        .testTag("column_menu_button_${index}")
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.MoreVert,
-                                        contentDescription = "Options de colonne",
-                                        tint = AppColors.TextSecondary,
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                }
-
-                                DropdownMenu(
-                                    expanded = menuExpanded,
-                                    onDismissRequest = { menuExpanded = false },
-                                    modifier = Modifier.background(AppColors.Panel)
-                                ) {
-                                    DropdownMenuItem(
-                                        text = {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Edit,
-                                                    contentDescription = null,
-                                                    tint = AppColors.Accent,
-                                                    modifier = Modifier.size(16.dp)
-                                                )
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                                Text("Modifier", color = AppColors.TextPrimary, fontSize = 12.sp)
-                                            }
-                                        },
-                                        onClick = {
-                                            onEditProperty(prop)
-                                            menuExpanded = false
-                                        }
-                                    )
-
-                                    HorizontalDivider(color = AppColors.Border)
-
-                                    if (!isFirst) {
-                                        DropdownMenuItem(
-                                            text = {
-                                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.FirstPage,
-                                                        contentDescription = null,
-                                                        tint = AppColors.Accent,
-                                                        modifier = Modifier.size(16.dp)
-                                                    )
-                                                    Spacer(modifier = Modifier.width(8.dp))
-                                                    Text("Passer tout devant", color = AppColors.TextPrimary, fontSize = 12.sp)
-                                                }
-                                            },
-                                            onClick = {
-                                                onMovePropertyToFront(prop.id)
-                                                menuExpanded = false
-                                            }
-                                        )
-                                        DropdownMenuItem(
-                                            text = {
-                                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                                    Icon(
-                                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                                        contentDescription = null,
-                                                        tint = AppColors.TextSecondary,
-                                                        modifier = Modifier.size(16.dp)
-                                                    )
-                                                    Spacer(modifier = Modifier.width(8.dp))
-                                                    Text("Déplacer à gauche", color = AppColors.TextPrimary, fontSize = 12.sp)
-                                                }
-                                            },
-                                            onClick = {
-                                                onMoveProperty(prop.id, -1)
-                                                menuExpanded = false
-                                            }
-                                        )
-                                    }
-
-                                    if (!isLast) {
-                                        DropdownMenuItem(
-                                            text = {
-                                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                                    Icon(
-                                                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                                        contentDescription = null,
-                                                        tint = AppColors.TextSecondary,
-                                                        modifier = Modifier.size(16.dp)
-                                                    )
-                                                    Spacer(modifier = Modifier.width(8.dp))
-                                                    Text("Déplacer à droite", color = AppColors.TextPrimary, fontSize = 12.sp)
-                                                }
-                                            },
-                                            onClick = {
-                                                onMoveProperty(prop.id, 1)
-                                                menuExpanded = false
-                                            }
-                                        )
-                                        DropdownMenuItem(
-                                            text = {
-                                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.LastPage,
-                                                        contentDescription = null,
-                                                        tint = AppColors.Accent,
-                                                        modifier = Modifier.size(16.dp)
-                                                    )
-                                                    Spacer(modifier = Modifier.width(8.dp))
-                                                    Text("Passer tout derrière", color = AppColors.TextPrimary, fontSize = 12.sp)
-                                                }
-                                            },
-                                            onClick = {
-                                                onMovePropertyToBack(prop.id)
-                                                menuExpanded = false
-                                            }
-                                        )
-                                    }
-
-                                    HorizontalDivider(color = AppColors.Border)
-
-                                    DropdownMenuItem(
-                                        text = {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Icon(
-                                                    imageVector = Icons.Outlined.Close,
-                                                    contentDescription = null,
-                                                    tint = AppColors.ErrorRed,
-                                                    modifier = Modifier.size(16.dp)
-                                                )
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                                Text("Supprimer la colonne", color = AppColors.ErrorRed, fontSize = 12.sp)
-                                            }
-                                        },
-                                        onClick = {
-                                            onDeleteProperty(prop.id)
-                                            menuExpanded = false
-                                        }
-                                    )
-                                }
-                            }
-                        }
+                        Text(
+                            text = "Aucune ligne. Clique sur '+ Ligne' pour commencer.",
+                            color = AppColors.TextMuted,
+                            fontSize = 13.sp
+                        )
                     }
-                }
-
-                // Header cell for action column
-                Box(
-                    modifier = Modifier
-                        .width(actionColumnWidth)
-                        .height(48.dp)
-                        .border(0.5.dp, AppColors.Border),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "#",
-                        color = AppColors.TextMuted,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-
-            // Data Rows
-            if (rows.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(80.dp)
-                        .padding(16.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "Aucune ligne. Clique sur '+ Ligne' pour commencer.",
-                        color = AppColors.TextMuted,
-                        fontSize = 13.sp
-                    )
-                }
-            } else {
-                rows.forEachIndexed { rowIndex, row ->
-                    val rowValues = remember(row.valuesJson) {
-                        try {
-                            JSONObject(row.valuesJson)
-                        } catch (_: Exception) {
-                            JSONObject()
-                        }
-                    }
-
-                    Row(
+                } else {
+                    Column(
                         modifier = Modifier
-                            .height(44.dp)
-                            .background(if (rowIndex % 2 == 0) AppColors.Background else AppColors.Panel.copy(alpha = 0.4f))
-                            .border(0.5.dp, AppColors.Border)
+                            .verticalScroll(verticalScrollState)
+                            .horizontalScroll(horizontalScrollState)
                     ) {
-                        properties.forEachIndexed { colIndex, prop ->
-                            val isFirst = colIndex == 0
-                            val width = if (isFirst) primaryColumnWidth else regularColumnWidth
-                            val cellValue = if (rowValues.has(prop.id)) {
-                                rowValues.optString(prop.id, "")
-                            } else ""
-
-                            Box(
-                                modifier = Modifier
-                                    .width(width)
-                                    .height(44.dp)
-                                    .border(0.5.dp, AppColors.Border)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxSize(),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Box(modifier = Modifier.weight(1f)) {
-                                        when (prop.kind) {
-                                            "text" -> {
-                                                TextCell(
-                                                    value = cellValue,
-                                                    onValueChange = { newValue ->
-                                                        onUpdateCell(row.id, prop.id, newValue)
-                                                    }
-                                                )
-                                            }
-                                            "number" -> {
-                                                NumberCell(
-                                                    value = cellValue,
-                                                    onValueChange = { newDouble ->
-                                                        onUpdateCell(row.id, prop.id, newDouble)
-                                                    },
-                                                    format = prop.format
-                                                )
-                                            }
-                                            "date" -> {
-                                                DateCell(
-                                                    value = cellValue,
-                                                    onValueChange = { newDate ->
-                                                        onUpdateCell(row.id, prop.id, newDate)
-                                                    }
-                                                )
-                                            }
-                                            "select" -> {
-                                                SelectCell(
-                                                    value = cellValue,
-                                                    optionsJson = prop.optionsJson,
-                                                    onValueChange = { newSelected ->
-                                                        onUpdateCell(row.id, prop.id, newSelected)
-                                                    }
-                                                )
-                                            }
-                                        }
-                                    }
-
-                                    // Primary Column Mini Pencil Button to open row page
-                                    if (isFirst) {
-                                        IconButton(
-                                            onClick = { onOpenRow(row) },
-                                            modifier = Modifier
-                                                .size(30.dp)
-                                                .padding(end = 4.dp)
-                                                .testTag("open_row_pencil_button_${rowIndex}")
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Edit,
-                                                contentDescription = "Ouvrir la page de l'élément",
-                                                tint = AppColors.Accent,
-                                                modifier = Modifier.size(15.dp)
-                                            )
-                                        }
-                                    }
+                        rows.forEachIndexed { rowIndex, row ->
+                            val rowValues = remember(row.valuesJson) {
+                                try {
+                                    JSONObject(row.valuesJson)
+                                } catch (_: Exception) {
+                                    JSONObject()
                                 }
-                            }
-                        }
-
-                        // Action cell with delete row button
-                        Box(
-                            modifier = Modifier
-                                .width(actionColumnWidth)
-                                .height(44.dp)
-                                .border(0.5.dp, AppColors.Border),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            IconButton(
-                                onClick = { onDeleteRow(row.id) },
-                                modifier = Modifier
-                                    .size(32.dp)
-                                    .testTag("delete_row_button_${rowIndex}")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Delete,
-                                    contentDescription = "Supprimer ligne",
-                                    tint = AppColors.TextMuted,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Footer Row (Summary for number columns: EITHER sum OR avg, NEVER both)
-            Row(
-                modifier = Modifier
-                    .background(AppColors.Panel)
-                    .height(44.dp)
-                    .border(1.dp, AppColors.Border),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                properties.forEachIndexed { colIndex, prop ->
-                    val isFirst = colIndex == 0
-                    val width = if (isFirst) primaryColumnWidth else regularColumnWidth
-
-                    Box(
-                        modifier = Modifier
-                            .width(width)
-                            .height(44.dp)
-                            .border(0.5.dp, AppColors.Border)
-                            .padding(horizontal = 8.dp)
-                            .clickable {
-                                // Toggle between sum and average by tapping the footer cell
-                                calculationMode = if (calculationMode == "sum") "avg" else "sum"
-                            },
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        if (prop.kind == "number") {
-                            val stats = numberStats[prop.id] ?: Pair(0.0, 0.0)
-                            // Le pied de tableau reprend le sous-format de la colonne.
-                            val displayText = if (calculationMode == "sum") {
-                                "Σ " + formatNumberValue(stats.first, prop.format)
-                            } else {
-                                "moy " + formatNumberValue(stats.second, prop.format)
                             }
 
                             Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(
-                                    text = displayText,
-                                    color = AppColors.Accent,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-
-                                Surface(
-                                    shape = RoundedCornerShape(3.dp),
-                                    color = AppColors.SelectedBg.copy(alpha = 0.5f)
-                                ) {
-                                    Text(
-                                        text = if (calculationMode == "sum") "somme" else "moy",
-                                        fontSize = 9.sp,
-                                        color = AppColors.AccentLight,
-                                        modifier = Modifier.padding(horizontal = 3.dp, vertical = 1.dp)
-                                    )
-                                }
-                            }
-                        } else if (isFirst) {
-                            // First column footer indicator: shows toggle button between Somme and Moyenne
-                            Surface(
-                                shape = RoundedCornerShape(4.dp),
-                                color = AppColors.Background,
-                                border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Border),
                                 modifier = Modifier
-                                    .clickable {
-                                        calculationMode = if (calculationMode == "sum") "avg" else "sum"
-                                    }
-                                    .testTag("footer_calc_mode_toggle")
+                                    .height(44.dp)
+                                    .background(if (rowIndex % 2 == 0) AppColors.Background else AppColors.Panel.copy(alpha = 0.4f))
+                                    .border(0.5.dp, AppColors.Border)
                             ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                properties.forEachIndexed { colIndex, prop ->
+                                    val isFirst = colIndex == 0
+                                    val width = if (isFirst) primaryColumnWidth else regularColumnWidth
+                                    val cellValue = if (rowValues.has(prop.id)) {
+                                        rowValues.optString(prop.id, "")
+                                    } else ""
+
+                                    Box(
+                                        modifier = Modifier
+                                            .width(width)
+                                            .height(44.dp)
+                                            .border(0.5.dp, AppColors.Border)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxSize(),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Box(modifier = Modifier.weight(1f)) {
+                                                when (prop.kind) {
+                                                    "text" -> {
+                                                        TextCell(
+                                                            value = cellValue,
+                                                            onValueChange = { newValue ->
+                                                                onUpdateCell(row.id, prop.id, newValue)
+                                                            }
+                                                        )
+                                                    }
+                                                    "number" -> {
+                                                        NumberCell(
+                                                            value = cellValue,
+                                                            onValueChange = { newDouble ->
+                                                                onUpdateCell(row.id, prop.id, newDouble)
+                                                            },
+                                                            format = prop.format
+                                                        )
+                                                    }
+                                                    "date" -> {
+                                                        DateCell(
+                                                            value = cellValue,
+                                                            onValueChange = { newDate ->
+                                                                onUpdateCell(row.id, prop.id, newDate)
+                                                            }
+                                                        )
+                                                    }
+                                                    "select" -> {
+                                                        SelectCell(
+                                                            value = cellValue,
+                                                            optionsJson = prop.optionsJson,
+                                                            onValueChange = { newSelected ->
+                                                                onUpdateCell(row.id, prop.id, newSelected)
+                                                            }
+                                                        )
+                                                    }
+                                                }
+                                            }
+
+                                            // Primary Column Mini Pencil Button to open row page
+                                            if (isFirst) {
+                                                IconButton(
+                                                    onClick = { onOpenRow(row) },
+                                                    modifier = Modifier
+                                                        .size(30.dp)
+                                                        .padding(end = 4.dp)
+                                                        .testTag("open_row_pencil_button_${rowIndex}")
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Edit,
+                                                        contentDescription = "Ouvrir la page de l'élément",
+                                                        tint = AppColors.Accent,
+                                                        modifier = Modifier.size(15.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Action cell with delete row button
+                                Box(
+                                    modifier = Modifier
+                                        .width(actionColumnWidth)
+                                        .height(44.dp)
+                                        .border(0.5.dp, AppColors.Border),
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Calculate,
-                                        contentDescription = null,
-                                        tint = AppColors.Accent,
-                                        modifier = Modifier.size(13.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = if (calculationMode == "sum") "Mode: Somme" else "Mode: Moyenne",
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = AppColors.TextPrimary
-                                    )
+                                    IconButton(
+                                        onClick = { onDeleteRow(row.id) },
+                                        modifier = Modifier
+                                            .size(32.dp)
+                                            .testTag("delete_row_button_${rowIndex}")
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Delete,
+                                            contentDescription = "Supprimer ligne",
+                                            tint = AppColors.TextMuted,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
                                 }
                             }
-                        } else {
-                            Text(
-                                text = "—",
-                                color = AppColors.TextMuted,
-                                fontSize = 11.sp
-                            )
                         }
                     }
                 }
+            }
 
-                // Footer cell for action column: Total row count
-                Box(
+            // Sticky Footer Row (Summary for number columns) : visible en permanence en bas.
+            TableFooterRow(
+                properties = properties,
+                rows = rows,
+                calculationMode = calculationMode,
+                numberStats = numberStats,
+                primaryColumnWidth = primaryColumnWidth,
+                regularColumnWidth = regularColumnWidth,
+                actionColumnWidth = actionColumnWidth,
+                onToggleCalculation = {
+                    calculationMode = if (calculationMode == "sum") "avg" else "sum"
+                },
+                modifier = Modifier.horizontalScroll(horizontalScrollState)
+            )
+        }
+    }
+}
+
+/** Colonne d'en-tête : nom, badge de type et menu de la colonne. */
+@Composable
+private fun ColumnHeaderCell(
+    prop: PropertyEntity,
+    index: Int,
+    isLast: Boolean,
+    width: Dp,
+    onEditProperty: (PropertyEntity) -> Unit,
+    onDeleteProperty: (String) -> Unit,
+    onMoveProperty: (String, Int) -> Unit,
+    onMovePropertyToFront: (String) -> Unit,
+    onMovePropertyToBack: (String) -> Unit
+) {
+    val isFirst = index == 0
+    var menuExpanded by remember { mutableStateOf(false) }
+
+    val kindDisplay = when (prop.kind) {
+        "text" -> "txt"
+        "number" -> "num"
+        "date" -> "date"
+        "select" -> "sel"
+        else -> prop.kind
+    }
+
+    Box(
+        modifier = Modifier
+            .width(width)
+            .height(48.dp)
+            .border(0.5.dp, AppColors.Border)
+            .padding(horizontal = 6.dp),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            if (isFirst) {
+                Icon(
+                    imageVector = Icons.Default.Star,
+                    contentDescription = "Colonne principale",
+                    tint = AppColors.Accent,
                     modifier = Modifier
-                        .width(actionColumnWidth)
-                        .height(44.dp)
-                        .border(0.5.dp, AppColors.Border),
-                    contentAlignment = Alignment.Center
+                        .size(13.dp)
+                        .padding(end = 2.dp)
+                )
+            }
+
+            Text(
+                text = prop.name,
+                color = AppColors.TextPrimary,
+                fontSize = 13.sp,
+                fontWeight = if (isFirst) FontWeight.Bold else FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+
+            Spacer(modifier = Modifier.width(2.dp))
+
+            // Kind indicator badge
+            Surface(
+                color = if (isFirst) AppColors.Accent.copy(alpha = 0.25f) else AppColors.SelectedBg.copy(alpha = 0.4f),
+                shape = RoundedCornerShape(3.dp)
+            ) {
+                Text(
+                    text = if (isFirst) "Principal" else kindDisplay,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = AppColors.AccentLight,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                )
+            }
+
+            // Column action menu (reordering and deletion)
+            Box {
+                IconButton(
+                    onClick = { menuExpanded = true },
+                    modifier = Modifier
+                        .size(24.dp)
+                        .testTag("column_menu_button_${index}")
                 ) {
-                    Text(
-                        text = "${rows.size}",
-                        color = AppColors.TextMuted,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = "Options de colonne",
+                        tint = AppColors.TextSecondary,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false },
+                    modifier = Modifier.background(AppColors.Panel)
+                ) {
+                    DropdownMenuItem(
+                        text = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = null,
+                                    tint = AppColors.Accent,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Modifier", color = AppColors.TextPrimary, fontSize = 12.sp)
+                            }
+                        },
+                        onClick = {
+                            onEditProperty(prop)
+                            menuExpanded = false
+                        }
+                    )
+
+                    HorizontalDivider(color = AppColors.Border)
+
+                    if (!isFirst) {
+                        DropdownMenuItem(
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.FirstPage,
+                                        contentDescription = null,
+                                        tint = AppColors.Accent,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Passer tout devant", color = AppColors.TextPrimary, fontSize = 12.sp)
+                                }
+                            },
+                            onClick = {
+                                onMovePropertyToFront(prop.id)
+                                menuExpanded = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = null,
+                                        tint = AppColors.TextSecondary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Déplacer à gauche", color = AppColors.TextPrimary, fontSize = 12.sp)
+                                }
+                            },
+                            onClick = {
+                                onMoveProperty(prop.id, -1)
+                                menuExpanded = false
+                            }
+                        )
+                    }
+
+                    if (!isLast) {
+                        DropdownMenuItem(
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                        contentDescription = null,
+                                        tint = AppColors.TextSecondary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Déplacer à droite", color = AppColors.TextPrimary, fontSize = 12.sp)
+                                }
+                            },
+                            onClick = {
+                                onMoveProperty(prop.id, 1)
+                                menuExpanded = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.LastPage,
+                                        contentDescription = null,
+                                        tint = AppColors.Accent,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Passer tout derrière", color = AppColors.TextPrimary, fontSize = 12.sp)
+                                }
+                            },
+                            onClick = {
+                                onMovePropertyToBack(prop.id)
+                                menuExpanded = false
+                            }
+                        )
+                    }
+
+                    HorizontalDivider(color = AppColors.Border)
+
+                    DropdownMenuItem(
+                        text = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Close,
+                                    contentDescription = null,
+                                    tint = AppColors.ErrorRed,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Supprimer la colonne", color = AppColors.ErrorRed, fontSize = 12.sp)
+                            }
+                        },
+                        onClick = {
+                            onDeleteProperty(prop.id)
+                            menuExpanded = false
+                        }
                     )
                 }
             }
+        }
+    }
+}
+
+/** En-tête de colonnes. */
+@Composable
+private fun TableHeaderRow(
+    properties: List<PropertyEntity>,
+    primaryColumnWidth: Dp,
+    regularColumnWidth: Dp,
+    actionColumnWidth: Dp,
+    onDeleteProperty: (String) -> Unit,
+    onEditProperty: (PropertyEntity) -> Unit,
+    onMoveProperty: (String, Int) -> Unit,
+    onMovePropertyToFront: (String) -> Unit,
+    onMovePropertyToBack: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .background(AppColors.Panel)
+            .height(48.dp)
+            .border(1.dp, AppColors.Border)
+    ) {
+        properties.forEachIndexed { index, prop ->
+            val isFirst = index == 0
+            val width = if (isFirst) primaryColumnWidth else regularColumnWidth
+
+            ColumnHeaderCell(
+                prop = prop,
+                index = index,
+                isLast = index == properties.lastIndex,
+                width = width,
+                onEditProperty = onEditProperty,
+                onDeleteProperty = onDeleteProperty,
+                onMoveProperty = onMoveProperty,
+                onMovePropertyToFront = onMovePropertyToFront,
+                onMovePropertyToBack = onMovePropertyToBack
+            )
+        }
+
+        // Header cell for action column
+        Box(
+            modifier = Modifier
+                .width(actionColumnWidth)
+                .height(48.dp)
+                .border(0.5.dp, AppColors.Border),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "#",
+                color = AppColors.TextMuted,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+/** Pied de tableau : somme ou moyenne des colonnes numériques + nombre de lignes. */
+@Composable
+private fun TableFooterRow(
+    properties: List<PropertyEntity>,
+    rows: List<EntryRowEntity>,
+    calculationMode: String,
+    numberStats: Map<String, Pair<Double, Double>>,
+    primaryColumnWidth: Dp,
+    regularColumnWidth: Dp,
+    actionColumnWidth: Dp,
+    onToggleCalculation: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .background(AppColors.Panel)
+            .height(44.dp)
+            .border(1.dp, AppColors.Border),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        properties.forEachIndexed { colIndex, prop ->
+            val isFirst = colIndex == 0
+            val width = if (isFirst) primaryColumnWidth else regularColumnWidth
+
+            Box(
+                modifier = Modifier
+                    .width(width)
+                    .height(44.dp)
+                    .border(0.5.dp, AppColors.Border)
+                    .padding(horizontal = 8.dp)
+                    .clickable {
+                        // Toggle between sum and average by tapping the footer cell
+                        onToggleCalculation()
+                    },
+                contentAlignment = Alignment.CenterStart
+            ) {
+                if (prop.kind == "number") {
+                    val stats = numberStats[prop.id] ?: Pair(0.0, 0.0)
+                    // Le pied de tableau reprend le sous-format de la colonne.
+                    val displayText = if (calculationMode == "sum") {
+                        "Σ " + formatNumberValue(stats.first, prop.format)
+                    } else {
+                        "moy " + formatNumberValue(stats.second, prop.format)
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = displayText,
+                            color = AppColors.Accent,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+
+                        Surface(
+                            shape = RoundedCornerShape(3.dp),
+                            color = AppColors.SelectedBg.copy(alpha = 0.5f)
+                        ) {
+                            Text(
+                                text = if (calculationMode == "sum") "somme" else "moy",
+                                fontSize = 9.sp,
+                                color = AppColors.AccentLight,
+                                modifier = Modifier.padding(horizontal = 3.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
+                } else if (isFirst) {
+                    // First column footer indicator: shows toggle button between Somme and Moyenne
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = AppColors.Background,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Border),
+                        modifier = Modifier
+                            .clickable { onToggleCalculation() }
+                            .testTag("footer_calc_mode_toggle")
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Calculate,
+                                contentDescription = null,
+                                tint = AppColors.Accent,
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (calculationMode == "sum") "Mode: Somme" else "Mode: Moyenne",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = AppColors.TextPrimary
+                            )
+                        }
+                    }
+                } else {
+                    Text(
+                        text = "—",
+                        color = AppColors.TextMuted,
+                        fontSize = 11.sp
+                    )
+                }
+            }
+        }
+
+        // Footer cell for action column: Total row count
+        Box(
+            modifier = Modifier
+                .width(actionColumnWidth)
+                .height(44.dp)
+                .border(0.5.dp, AppColors.Border),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "${rows.size}",
+                color = AppColors.TextMuted,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium
+            )
         }
     }
 }

@@ -10,7 +10,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Email
@@ -63,8 +65,12 @@ fun AuthDialog(
             border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Border),
             modifier = Modifier.fillMaxWidth().testTag("auth_dialog")
         ) {
+            // Le message d'erreur peut être long : la colonne reste scrollable plutôt que
+            // de pousser le bouton hors de l'écran.
             Column(
-                modifier = Modifier.padding(20.dp)
+                modifier = Modifier
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState())
             ) {
                 // Header with title and close button
                 Row(

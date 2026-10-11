@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Chemins partagés avec les autres applications. Seul le dossier des images de lignes
+  est exposé : l'appareil photo y écrit directement, sans passer par un fichier temporaire
+  de plus. Le FileProvider est obligatoire depuis l'API 24 pour ne pas exposer une URI
+  "file://" en `FileUriExposedException`.
+-->
+<paths>
+    <files-path
+        name="row_images"
+        path="row_images/" />
+</paths>
