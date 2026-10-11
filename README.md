@@ -28,6 +28,14 @@ Il suffit de télécharger le `.apk` de la nouvelle version et de lancer l'insta
   vos données locales sont effacées, car elles ne vivaient que sur l'appareil.
   Voir « Retrouver ses données » plus bas.
 
+### Changer de compte (depuis la 1.3.0)
+
+- Si vous vous déconnectez puis vous connectez avec un autre email,
+  les données du compte précédent ne s'affichent plus.
+- Chaque compte retrouve uniquement ses propres données.
+- Une fois déconnecté, vous ne voyez que les données
+  jamais rattachées à un compte.
+
 ## Tutoriel — premiers pas
 
 ### 1. Créer une table
@@ -74,8 +82,26 @@ Chaque cellule se remplit selon le type de sa colonne :
 | Sélection | Appuyez sur la cellule, choisissez dans la liste |
 
 Appuyez sur une ligne pour ouvrir son détail : vous y retrouvez ses propriétés,
-un espace pour ajouter des images, et une zone de notes libres en dessous.
+une section « Images », et une zone de notes libres en dessous.
 La corbeille en fin de ligne supprime cette ligne.
+
+### 4. Détail d'une ligne : images et notes
+
+- Dans le détail, la section **Images** indique « aucune image »
+  tant qu'il n'y en a pas.
+- Appuyez sur **Ajouter une image** (puis **Ajouter une autre image**
+  quand il y en a déjà).
+- Un menu propose deux choix :
+  - **Depuis l'appareil** — choisit une ou plusieurs photos de la galerie.
+  - **Appareil photo** — prend une photo directement.
+- Les images s'affichent en grille, deux par ligne.
+- Chaque image porte une croix en haut à droite : elle retire
+  l'image de la ligne.
+- Si vous êtes connecté à un compte, vos images sont envoyées vers
+  votre espace en ligne. Elles sont récupérées sur vos autres appareils
+  via la synchronisation.
+- Plus bas, la zone **Espace libre** sert aux notes :
+  appuyez dessus et écrivez librement.
 
 ## Où sont stockées vos données
 
@@ -92,5 +118,8 @@ récupérer, connectez-vous à votre compte :
 2. Une fois connecté, la section **Synchronisation cloud** apparaît plus bas.
 3. Appuyez sur **Synchroniser maintenant** : vos tables, colonnes et lignes sont
    récupérées depuis votre espace en ligne.
+4. Vos images sont récupérées elles aussi. Au premier passage sur un nouvel
+   appareil, leur téléchargement peut prendre un moment : prévoyez
+   une connexion le temps que tout arrive.
 
 Sans compte connecté, vos données restent uniquement sur l'appareil.
