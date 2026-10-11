@@ -12,6 +12,10 @@ interface EntryRowDao {
     @Query("SELECT * FROM entry_rows WHERE journal_id = :journalId AND deleted_at IS NULL ORDER BY created_at ASC")
     fun watchByJournal(journalId: String): Flow<List<EntryRowEntity>>
 
+    // Même règle que les journaux : lignes du compte + orphelines en attente d'adoption.
+    @Query("SELECT * FROM entry_rows WHERE journal_id = :journalId AND (user_id IS :userId OR user_id IS NULL) AND deleted_at IS NULL ORDER BY created_at ASC")
+    fun watchByJournalForUser(journalId: String, userId: String?): Flow<List<EntryRowEntity>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(row: EntryRowEntity)
 

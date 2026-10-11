@@ -13,6 +13,10 @@ interface PropertyDao {
     @Query("SELECT * FROM properties WHERE journal_id = :journalId AND deleted_at IS NULL ORDER BY sort_order ASC")
     fun watchByJournal(journalId: String): Flow<List<PropertyEntity>>
 
+    // Même règle que les journaux : lignes du compte + orphelines en attente d'adoption.
+    @Query("SELECT * FROM properties WHERE journal_id = :journalId AND (user_id IS :userId OR user_id IS NULL) AND deleted_at IS NULL ORDER BY sort_order ASC")
+    fun watchByJournalForUser(journalId: String, userId: String?): Flow<List<PropertyEntity>>
+
     @Query("SELECT COUNT(*) FROM properties WHERE journal_id = :journalId AND deleted_at IS NULL")
     suspend fun countByJournal(journalId: String): Int
 

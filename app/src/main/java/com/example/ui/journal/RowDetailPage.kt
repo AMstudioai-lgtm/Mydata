@@ -57,6 +57,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.db.entity.EntryRowEntity
 import com.example.data.db.entity.PropertyEntity
+import com.example.data.images.IMAGES_KEY
+import com.example.data.images.rowImagesFromJson
+import com.example.data.images.rowImagesToJson
 import com.example.ui.theme.AppColors
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -90,7 +93,7 @@ fun RowDetailPage(
         rowValues.optString(primaryProperty.id, "")
     } else ""
 
-    val imageUris = remember(row.valuesJson) { readImageUris(row.valuesJson) }
+    val rowImages = remember(row.valuesJson) { rowImagesFromJson(row.valuesJson) }
     val notesValue = remember(row.valuesJson) { readNotes(row.valuesJson) }
 
     // Titre : buffer local comme dans les cellules du tableau. Le champ est réécrit en base
@@ -369,10 +372,10 @@ fun RowDetailPage(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = if (imageUris.isEmpty()) {
+                    text = if (rowImages.isEmpty()) {
                         "aucune image"
                     } else {
-                        "${imageUris.size}" + (if (imageUris.size > 1) " images" else " image")
+                        "${rowImages.size}" + (if (rowImages.size > 1) " images" else " image")
                     },
                     fontSize = 11.sp,
                     color = AppColors.TextMuted
@@ -381,8 +384,10 @@ fun RowDetailPage(
             Spacer(modifier = Modifier.height(10.dp))
 
             RowImagesSection(
-                images = imageUris,
-                onImagesChanged = { updated -> onUpdateCell(row.id, IMAGES_KEY, imageUrisJson(updated)) },
+                images = rowImages,
+                onImagesChanged = { updated ->
+                    onUpdateCell(row.id, IMAGES_KEY, rowImagesToJson(updated))
+                },
                 modifier = Modifier.testTag("row_detail_images_section")
             )
 

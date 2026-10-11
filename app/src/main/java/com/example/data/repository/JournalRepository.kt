@@ -19,7 +19,15 @@ class JournalRepository(
     private val propertyDao = db.propertyDao()
     private val entryRowDao = db.entryRowDao()
 
-    fun watchJournals(): Flow<List<JournalEntity>> = journalDao.watchAll()
+    fun watchJournals(userId: String?): Flow<List<JournalEntity>> =
+        journalDao.watchAllForUser(userId)
+
+    // Rattache les lignes orphelines (créées hors-ligne, user_id NULL) au compte connecté.
+    suspend fun adoptOrphans(userId: String) {
+        journalDao.adoptOrphans(userId)
+        propertyDao.adoptOrphans(userId)
+        entryRowDao.adoptOrphans(userId)
+    }
 
     suspend fun createJournal(customName: String? = null): String {
         val count = journalDao.count() + 1
@@ -47,8 +55,8 @@ class JournalRepository(
         journalDao.softDelete(id, now)
     }
 
-    fun watchProps(journalId: String): Flow<List<PropertyEntity>> =
-        propertyDao.watchByJournal(journalId)
+    fun watchProps(journalId: String, userId: String?): Flow<List<PropertyEntity>> =
+        propertyDao.watchByJournalForUser(journalId, userId)
 
     suspend fun addProperty(
         journalId: String,
@@ -129,8 +137,8 @@ class JournalRepository(
         }
     }
 
-    fun watchRows(journalId: String): Flow<List<EntryRowEntity>> =
-        entryRowDao.watchByJournal(journalId)
+    fun watchRows(journalId: String, userId: String?): Flow<List<EntryRowEntity>> =
+        entryRowDao.watchByJournalForUser(journalId, userId)
 
     suspend fun addRow(journalId: String): String {
         val id = UUID.randomUUID().toString()
