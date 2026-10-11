@@ -6,6 +6,10 @@ import com.example.data.db.AppDatabase
 import com.example.data.db.entity.EntryRowEntity
 import com.example.data.db.entity.JournalEntity
 import com.example.data.db.entity.PropertyEntity
+import com.example.data.images.ImageStore
+import com.example.data.images.rowImagesFromJson
+import com.example.data.images.writeImagesToValuesJson
+import java.io.IOException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -48,7 +52,8 @@ class SyncRepository(
     private val client: SupabaseSyncClient,
     private val prefs: SyncPreferences,
     private val sessionProvider: () -> AuthSession?,
-    private val authService: SupabaseAuthService
+    private val authService: SupabaseAuthService,
+    private val imageStore: ImageStore? = null
 ) {
     private val _status = MutableStateFlow(SyncStatus(lastSyncAt = prefs.lastSyncAt()))
     val status: StateFlow<SyncStatus> = _status.asStateFlow()
@@ -130,7 +135,7 @@ class SyncRepository(
             applied += when (table) {
                 "journals" -> applyJournal(row)
                 "properties" -> applyProperty(row)
-                else -> applyEntryRow(row)
+                else -> applyEntryRow(row, userId)
             }
         }
         prefs.rememberPull(table, maxRemote)
@@ -142,7 +147,7 @@ class SyncRepository(
         val pending: List<JSONObject> = when (table) {
             "journals" -> journalDao.pendingPush(userId, cursor).map { it.toJson(client::now) }
             "properties" -> propertyDao.pendingPush(userId, cursor).map { it.toJson(client::now) }
-            else -> entryRowDao.pendingPush(userId, cursor).map { it.toJson(client::now) }
+            else -> entryRowDao.pendingPush(userId, cursor).map { entryRowPushJson(userId, it) }
         }
         if (pending.isEmpty()) return 0
 
@@ -168,11 +173,68 @@ class SyncRepository(
         return 1
     }
 
-    private suspend fun applyEntryRow(row: JSONObject): Int {
+    private suspend fun applyEntryRow(row: JSONObject, userId: String): Int {
         val existing = entryRowDao.getById(row.getString("id"))
         if (existing != null && !ConflictResolver.remoteWins(existing.updatedAt, row.optLong("updated_at"))) return 0
-        entryRowDao.upsert(entryRowFromJson(row))
+        val received = entryRowFromJson(row)
+        entryRowDao.upsert(received)
+        downloadMissingImages(userId, received)
         return 1
+    }
+
+    /**
+     * Téléverse les images locales d'une ligne avant son envoi.
+     * Le JSON poussé porte les chemins distants, sans toucher à `updated_at`.
+     */
+    private suspend fun entryRowPushJson(userId: String, row: EntryRowEntity): JSONObject {
+        val json = row.toJson(client::now)
+        val store = imageStore ?: return json
+        val images = rowImagesFromJson(row.valuesJson)
+        if (images.isEmpty()) return json
+        // Panne réseau : la ligne part avec ses images d'origine et le reste de la
+        // synchro continue. Seule une erreur d'authentification remonte et fait
+        // échouer la synchro.
+        val uploaded = try {
+            store.uploadPending(userId, row.id, images)
+        } catch (_: IOException) {
+            images
+        }
+        val valuesJson = writeImagesToValuesJson(row.valuesJson, uploaded)
+        if (valuesJson == row.valuesJson) return json
+        json.put("values_json", valuesJson)
+        // Mémorise les chemins distants en conservant `updated_at` : l'enregistrement
+        // local ne repasse pas pour une modification.
+        entryRowDao.updateValues(row.id, valuesJson, row.updatedAt, row.userId)
+        return json
+    }
+
+    /**
+     * Récupère les images distantes sans équivalent local affichable, après l'upsert
+     * d'une ligne reçue. Le téléchargement ne modifie pas `updated_at`.
+     */
+    private suspend fun downloadMissingImages(userId: String, row: EntryRowEntity) {
+        val store = imageStore ?: return
+        val images = rowImagesFromJson(row.valuesJson)
+        if (images.none { !it.remote.isNullOrBlank() && it.uri.isNullOrBlank() }) return
+        val enriched = images.map { image ->
+            if (!image.remote.isNullOrBlank() && image.uri.isNullOrBlank()) {
+                try {
+                    store.ensureLocal(userId, row.id, image)
+                } catch (_: IOException) {
+                    image
+                }
+            } else {
+                image
+            }
+        }
+        if (enriched != images) {
+            entryRowDao.updateValues(
+                row.id,
+                writeImagesToValuesJson(row.valuesJson, enriched),
+                row.updatedAt,
+                row.userId
+            )
+        }
     }
 
     /** Supprime définitivement les tombes anciennes, une fois propagées avec certitude. */
