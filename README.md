@@ -10,6 +10,24 @@ Vos données sont stockées sur votre appareil et restent accessibles sans conne
 3. Autorisez l'installation depuis votre navigateur ou votre gestionnaire de fichiers
    (Android demande une confirmation pour les applications hors du Play Store).
 
+## Mise à jour d'une version à l'autre
+
+**À partir de la version 1.2.0, vous pouvez installer une nouvelle version directement,
+sans désinstaller l'ancienne.** L'application se met à jour normalement et vos données
+locales sont conservées.
+
+Il suffit de télécharger le `.apk` de la nouvelle version et de lancer l'installation.
+
+### Cas particuliers
+
+- **Vous étiez sur une version antérieure à la 1.2.0** (jusqu'à la 1.1.1 incluse) :
+  la clé de signature a changé à ce moment-là. Android refuse la mise à jour sur place.
+  Désinstallez une fois l'ancienne version, installez la 1.2.0 ou une version plus
+  récente, et les mises à jour suivantes se feront ensuite sans désinstallation.
+- **Vous réinstallez complètement l'application** (après une désinstallation) :
+  vos données locales sont effacées, car elles ne vivaient que sur l'appareil.
+  Voir « Retrouver ses données » plus bas.
+
 ## Tutoriel — premiers pas
 
 ### 1. Créer une table
@@ -34,7 +52,8 @@ Une boîte de dialogue demande :
 - **Type** de la colonne :
   - **Texte** — texte libre.
   - **Nombre** — valeur numérique. Un total et une moyenne sont calculés
-    automatiquement en bas du tableau.
+    automatiquement en bas du tableau. Un format d'affichage est proposé :
+    nombre libre, pourcentage (`%`) ou dollars (`$`).
   - **Date** — affiche un sélecteur de date, au format `AAAA-MM-JJ`.
   - **Sélection** — choix parmi une liste définie par vous : indiquez les options
     dans le champ « Options », séparées par des virgules (ex. `Long, Short`).
@@ -54,7 +73,8 @@ Chaque cellule se remplit selon le type de sa colonne :
 | Date | Appuyez sur la cellule, choisissez une date |
 | Sélection | Appuyez sur la cellule, choisissez dans la liste |
 
-Appuyez sur une ligne pour ouvrir son détail et la consulter en pleine page.
+Appuyez sur une ligne pour ouvrir son détail : vous y retrouvez ses propriétés,
+un espace pour ajouter des images, et une zone de notes libres en dessous.
 La corbeille en fin de ligne supprime cette ligne.
 
 ## Où sont stockées vos données
@@ -63,30 +83,14 @@ Tout est enregistré **localement sur votre téléphone**, dans la base de donn�
 de l'application. Aucune donnée n'est envoyée sur internet sans que vous ne vous
 connectiez à un compte. L'application fonctionne donc entièrement hors connexion.
 
-## Désinstaller puis réinstaller
-
-Pour passer d'une version à l'autre, il faut **désinstaller l'ancienne version** puis
-installer le nouveau `.apk`. Android refuse une mise à jour sur place entre ces versions.
-
-**À noter : désinstaller l'application supprime les données stockées sur l'appareil.**
-Vos tables, colonnes et lignes seront perdues si vous n'en avez pas fait de copie.
-
 ## Retrouver ses données
 
-Deux possibilités pour ne rien perdre :
+Si vous réinstallez l'application, la base locale est repartie de zéro. Pour tout
+récupérer, connectez-vous à votre compte :
 
-1. **Se connecter à un compte.** Depuis le menu latérieur → **Paramètres**, utilisez
-   « Connexion / Créer un compte ». Une fois connecté, la section *Synchronisation cloud*
-   de la page Paramètres permet d'envoyer vos données vers votre espace en ligne et de les
-   récupérer sur un autre appareil. Après une réinstallation, reconnectez-vous puis
-   lancez **Synchroniser maintenant** pour retrouver vos tables.
-2. **Conserver ses données avant toute manipulation.** Faute de compte connecté, notez ou
-   exportez les informations importantes avant de désinstaller.
+1. Menu latéral → **Paramètres** → « Connexion / Créer un compte ».
+2. Une fois connecté, la section **Synchronisation cloud** apparaît plus bas.
+3. Appuyez sur **Synchroniser maintenant** : vos tables, colonnes et lignes sont
+   récupérées depuis votre espace en ligne.
 
-## Mise à jour vers une nouvelle version
-
-1. Désinstallez la version actuelle.
-2. Téléchargez le `.apk` de la dernière version.
-3. Installez-le.
-4. Si vous utilisiez un compte, reconnectez-vous et appuyez sur **Synchroniser maintenant**
-   dans Paramètres.
+Sans compte connecté, vos données restent uniquement sur l'appareil.
