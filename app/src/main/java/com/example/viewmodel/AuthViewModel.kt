@@ -7,8 +7,11 @@ import com.example.data.auth.AuthSession
 import com.example.data.auth.AuthState
 import com.example.data.auth.SupabaseAuthService
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class AuthViewModel(
@@ -17,6 +20,15 @@ class AuthViewModel(
 
     private val _authState = MutableStateFlow<AuthState>(AuthState.Loading)
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
+
+    // Dérivé de authState : null si déconnecté, sinon l'userId de la session.
+    val currentUserId: StateFlow<String?> = _authState
+        .map { state -> (state as? AuthState.LoggedIn)?.session?.userId }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
 
     private val _isSubmitting = MutableStateFlow(false)
     val isSubmitting: StateFlow<Boolean> = _isSubmitting.asStateFlow()

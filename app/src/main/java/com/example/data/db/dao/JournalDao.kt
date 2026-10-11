@@ -13,6 +13,12 @@ interface JournalDao {
     @Query("SELECT * FROM journals WHERE deleted_at IS NULL ORDER BY created_at ASC")
     fun watchAll(): Flow<List<JournalEntity>>
 
+    // Filtrage par compte : les orphelines (user_id NULL) restent visibles
+    // pour être adoptées à la prochaine connexion (cf. adoptOrphans).
+    // `IS` et non `=` car `= NULL` ne matche jamais en SQLite.
+    @Query("SELECT * FROM journals WHERE (user_id IS :userId OR user_id IS NULL) AND deleted_at IS NULL ORDER BY created_at ASC")
+    fun watchAllForUser(userId: String?): Flow<List<JournalEntity>>
+
     @Query("SELECT COUNT(*) FROM journals")
     suspend fun count(): Int
 

@@ -47,6 +47,7 @@ class MainActivity : ComponentActivity() {
             val selectedRowForDetail by journalViewModel.selectedRowForDetail.collectAsStateWithLifecycle()
 
             val authState by authViewModel.authState.collectAsStateWithLifecycle()
+            val currentUserId by authViewModel.currentUserId.collectAsStateWithLifecycle()
             val isAuthSubmitting by authViewModel.isSubmitting.collectAsStateWithLifecycle()
             val authErrorMessage by authViewModel.errorMessage.collectAsStateWithLifecycle()
 
@@ -54,13 +55,24 @@ class MainActivity : ComponentActivity() {
             val syncOutcome by syncViewModel.lastOutcome.collectAsStateWithLifecycle()
             val isSyncAvailable by syncViewModel.isAvailable.collectAsStateWithLifecycle()
 
+            // Propage le compte courant vers le ViewModel des journaux pour que
+            // chaque compte ne voie que ses données (+ orphelines) via flatMapLatest.
+            LaunchedEffect(currentUserId) {
+                journalViewModel.setCurrentUser(currentUserId)
+            }
+
             // Une connexion qui vient de réussir déclenche la synchronisation immédiatement,
             // pour que l'utilisateur retrouve ses données sans action supplémentaire.
             var wasLoggedIn by remember { mutableStateOf(authState is AuthState.LoggedIn) }
             LaunchedEffect(authState) {
-                val isLoggedIn = authState is AuthState.LoggedIn
-                if (isLoggedIn && !wasLoggedIn) syncViewModel.syncNow()
-                wasLoggedIn = isLoggedIn
+                val loggedInState = authState as? AuthState.LoggedIn
+                if (loggedInState != null && !wasLoggedIn) {
+                    // Les orphelines créées hors-ligne sont adoptées AVANT la synchro
+                    // pour être incluses dans le push vers le cloud.
+                    container.journalRepository.adoptOrphans(loggedInState.session.userId)
+                    syncViewModel.syncNow()
+                }
+                wasLoggedIn = loggedInState != null
             }
 
             AppTheme {

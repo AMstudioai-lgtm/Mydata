@@ -23,7 +23,15 @@ class JournalViewModel(
     private val repository: JournalRepository
 ) : ViewModel() {
 
-    val journals: StateFlow<List<JournalEntity>> = repository.watchJournals()
+    private val _currentUserId = MutableStateFlow<String?>(null)
+    val currentUserId: StateFlow<String?> = _currentUserId.asStateFlow()
+
+    fun setCurrentUser(userId: String?) {
+        _currentUserId.value = userId
+    }
+
+    val journals: StateFlow<List<JournalEntity>> = _currentUserId
+        .flatMapLatest { userId -> repository.watchJournals(userId) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -47,9 +55,13 @@ class JournalViewModel(
     )
 
     // Properties for selected journal
-    val properties: StateFlow<List<PropertyEntity>> = selectedJournal
-        .flatMapLatest { journal ->
-            if (journal != null) repository.watchProps(journal.id) else flowOf(emptyList())
+    // Combine avec l'utilisateur courant pour que le changement de compte
+    // re-filtre immédiatement sans attendre un changement de journal.
+    val properties: StateFlow<List<PropertyEntity>> = combine(selectedJournal, _currentUserId) { journal, userId ->
+        journal to userId
+    }
+        .flatMapLatest { (journal, userId) ->
+            if (journal != null) repository.watchProps(journal.id, userId) else flowOf(emptyList())
         }
         .stateIn(
             scope = viewModelScope,
@@ -58,9 +70,11 @@ class JournalViewModel(
         )
 
     // Entry rows for selected journal
-    val rows: StateFlow<List<EntryRowEntity>> = selectedJournal
-        .flatMapLatest { journal ->
-            if (journal != null) repository.watchRows(journal.id) else flowOf(emptyList())
+    val rows: StateFlow<List<EntryRowEntity>> = combine(selectedJournal, _currentUserId) { journal, userId ->
+        journal to userId
+    }
+        .flatMapLatest { (journal, userId) ->
+            if (journal != null) repository.watchRows(journal.id, userId) else flowOf(emptyList())
         }
         .stateIn(
             scope = viewModelScope,
