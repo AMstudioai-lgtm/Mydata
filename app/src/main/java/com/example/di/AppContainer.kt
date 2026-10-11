@@ -39,20 +39,12 @@ class AppContainer(context: Context) {
             null
         }
 
-    val syncRepository: SyncRepository? = syncClient?.let { client ->
-        SyncRepository(
-            db = database,
-            client = client,
-            prefs = SyncPreferences(appContext),
-            sessionProvider = { authService.getCachedSession() },
-            authService = authService,
-            imageStore = imageStore
-        )
-    }
-
     /**
      * Stockage des images de lignes, adossé aux mêmes identifiants Supabase que la
      * synchro. Nul si Supabase n'est pas configuré : la synchro ignore alors les images.
+     *
+     * Déclaré AVANT syncRepository : Kotlin initialise dans l'ordre de déclaration,
+     * et syncRepository en a besoin dès sa construction.
      */
     private val storageClient: SupabaseStorageClient? =
         if (BuildConfig.SUPABASE_URL.isNotBlank() && BuildConfig.SUPABASE_KEY.isNotBlank()) {
@@ -67,4 +59,15 @@ class AppContainer(context: Context) {
         }
 
     private val imageStore: ImageStore = ImageStore(appContext, storageClient)
+
+    val syncRepository: SyncRepository? = syncClient?.let { client ->
+        SyncRepository(
+            db = database,
+            client = client,
+            prefs = SyncPreferences(appContext),
+            sessionProvider = { authService.getCachedSession() },
+            authService = authService,
+            imageStore = imageStore
+        )
+    }
 }
