@@ -12,6 +12,9 @@ import com.example.data.images.SupabaseStorageClient
 import com.example.data.sync.SupabaseSyncClient
 import com.example.data.sync.SyncPreferences
 import com.example.data.sync.SyncRepository
+import com.example.data.update.UpdateChecker
+import okhttp3.OkHttpClient
+import java.util.concurrent.TimeUnit
 
 class AppContainer(context: Context) {
     private val appContext = context.applicationContext
@@ -70,4 +73,24 @@ class AppContainer(context: Context) {
             imageStore = imageStore
         )
     }
+
+    /**
+     * Préférences partagées avec la synchro (même fichier `myapp_sync_prefs`,
+     * clés disjointes `last_update_*` / `auto_sync`) : un seul fichier à
+     * sauvegarder, aucun conflit d'écriture.
+     */
+    private val syncPrefs = appContext.getSharedPreferences("myapp_sync_prefs", Context.MODE_PRIVATE)
+
+    /**
+     * Vérificateur de mises à jour GitHub. Les clients Supabase gardent leur
+     * OkHttpClient privé : il n'y a pas de client partageable accessible, donc
+     * un client dédié est construit ici avec des timeouts courts.
+     */
+    val updateChecker: UpdateChecker = UpdateChecker(
+        prefs = syncPrefs,
+        client = OkHttpClient.Builder()
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(10, TimeUnit.SECONDS)
+            .build()
+    )
 }
