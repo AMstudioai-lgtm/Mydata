@@ -7,6 +7,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.db.entity.EntryRowEntity
 import com.example.data.db.entity.JournalEntity
 import com.example.data.db.entity.PropertyEntity
+import com.example.data.backup.BackupInfo
+import com.example.data.backup.BackupManager
 import com.example.data.repository.JournalRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -19,11 +21,6 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.lang.reflect.InvocationTargetException
-import kotlin.coroutines.intrinsics.COROUTINE_SUSPENDED
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
-import kotlin.coroutines.suspendCoroutine
 
 /** Tri du tableau : colonne ciblée + sens. `ascending == null` = ordre de création. */
 data class TableSort(
@@ -34,7 +31,7 @@ data class TableSort(
 @OptIn(ExperimentalCoroutinesApi::class)
 class JournalViewModel(
     private val repository: JournalRepository,
-    backupManager: Any? = null
+    backupManager: BackupManager? = null
 ) : ViewModel() {
 
     private val _currentUserId = MutableStateFlow<String?>(null)
@@ -176,46 +173,8 @@ class JournalViewModel(
         }
     }
 
-    // Corbeille (méthodes T1 sur le repository, invoquées par réflexion pour que
-    // cette branche compile avant la fusion : signatures visées à la lettre).
-    @Suppress("UNCHECKED_CAST")
-    private fun <T> flowFromRepository(methodName: String, vararg args: Any?): Flow<List<T>> {
-        return try {
-            val method = repository.javaClass.methods.firstOrNull {
-                it.name == methodName && it.parameterTypes.size == args.size
-            } ?: return flowOf(emptyList())
-            (method.invoke(repository, *args) as? Flow<List<T>>) ?: flowOf(emptyList())
-        } catch (_: Exception) {
-            flowOf(emptyList())
-        }
-    }
-
-    private suspend fun invokeRepositorySuspend(methodName: String, id: String) {
-        val method = repository.javaClass.methods.firstOrNull { it.name == methodName } ?: return
-        if (method.parameterTypes.size == 1) {
-            // Méthode non-suspend : appel direct.
-            try {
-                method.invoke(repository, id)
-            } catch (_: Exception) {
-                Unit
-            }
-            return
-        }
-        // Méthode suspend (id, Continuation) : appel avec continuation manuelle.
-        suspendCoroutine { cont ->
-            try {
-                val res = method.invoke(repository, id, cont)
-                if (res != COROUTINE_SUSPENDED) cont.resume(Unit)
-            } catch (e: InvocationTargetException) {
-                cont.resumeWithException(e.targetException ?: e)
-            } catch (e: Exception) {
-                cont.resumeWithException(e)
-            }
-        }
-    }
-
     val trashedJournals: StateFlow<List<JournalEntity>> =
-        flowFromRepository<JournalEntity>("watchTrashedJournals")
+        repository.watchTrashedJournals()
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5000),
@@ -223,7 +182,7 @@ class JournalViewModel(
             )
 
     val trashedRows: StateFlow<List<EntryRowEntity>> =
-        flowFromRepository<EntryRowEntity>("watchAllTrashedRows")
+        repository.watchAllTrashedRows()
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5000),
@@ -231,29 +190,26 @@ class JournalViewModel(
             )
 
     fun trashedRowsForJournal(journalId: String): Flow<List<EntryRowEntity>> =
-        flowFromRepository("watchTrashedRows", journalId)
+        repository.watchTrashedRows(journalId)
 
     fun restoreJournal(id: String) {
-        viewModelScope.launch { invokeRepositorySuspend("restoreJournal", id) }
+        viewModelScope.launch { repository.restoreJournal(id) }
     }
 
     fun purgeJournal(id: String) {
-        viewModelScope.launch { invokeRepositorySuspend("purgeJournal", id) }
+        viewModelScope.launch { repository.purgeJournal(id) }
     }
 
     fun restoreRow(id: String) {
-        viewModelScope.launch { invokeRepositorySuspend("restoreRow", id) }
+        viewModelScope.launch { repository.restoreRow(id) }
     }
 
     fun purgeRow(id: String) {
-        viewModelScope.launch { invokeRepositorySuspend("purgeRow", id) }
+        viewModelScope.launch { repository.purgeRow(id) }
     }
 
-    // Sauvegarde via BackupManager (T1). Le manager est typé en `Any?` pour compiler
-    // avant la fusion ; ses méthodes exportBackup/importBackup(uri): Result<*> sont
-    // invoquées par réflexion, en version directe ou suspendue.
-    private val _backupManager = MutableStateFlow<Any?>(backupManager)
-    fun setBackupManager(manager: Any?) {
+    private val _backupManager = MutableStateFlow<BackupManager?>(backupManager)
+    fun setBackupManager(manager: BackupManager?) {
         _backupManager.value = manager
     }
 
@@ -264,93 +220,37 @@ class JournalViewModel(
         _backupFeedback.value = null
     }
 
-    private fun readBackupLong(info: Any, vararg names: String): Long? {
-        val cls = info.javaClass
-        for (name in names) {
-            try {
-                val field = cls.getDeclaredField(name)
-                field.isAccessible = true
-                (field.get(info) as? Number)?.let { return it.toLong() }
-            } catch (_: Exception) {
-                // Nom de champ absent : essaie les accesseurs.
-            }
-            try {
-                val capitalized = name.replaceFirstChar { it.uppercase() }
-                val accessor = cls.methods.firstOrNull {
-                    it.name == name || it.name == "get$capitalized" || it.name == "is$capitalized"
-                }
-                (accessor?.invoke(info) as? Number)?.let { return it.toLong() }
-            } catch (_: Exception) {
-                // Accesseur absent : nom suivant.
-            }
-        }
-        return null
-    }
-
-    private fun backupSummary(info: Any?): String? {
-        if (info == null) return null
-        val tables = readBackupLong(info, "tables", "tableCount", "journals", "journalCount")
-        val rows = readBackupLong(info, "rows", "rowCount", "lines", "lineCount", "entries", "entryCount")
-        val images = readBackupLong(info, "images", "imageCount")
-        val parts = buildList {
-            if (tables != null) add("$tables tables")
-            if (rows != null) add("$rows lignes")
-            if (images != null) add("$images images")
-        }
-        return parts.joinToString(", ").ifBlank { null }
-    }
-
-    private suspend fun invokeBackup(name: String, uri: Uri): Result<*>? {
-        val manager = _backupManager.value ?: return null
-        val method = manager.javaClass.methods.firstOrNull { it.name == name } ?: return null
-        return try {
-            if (method.parameterTypes.size == 1) {
-                @Suppress("UNCHECKED_CAST")
-                method.invoke(manager, uri) as? Result<*>
-            } else {
-                suspendCoroutine { cont ->
-                    try {
-                        val res = method.invoke(manager, uri, cont)
-                        if (res != COROUTINE_SUSPENDED) {
-                            @Suppress("UNCHECKED_CAST")
-                            cont.resume(res as? Result<*>)
-                        }
-                    } catch (e: InvocationTargetException) {
-                        cont.resumeWithException(e.targetException ?: e)
-                    } catch (e: Exception) {
-                        cont.resumeWithException(e)
-                    }
-                }
-            }
-        } catch (e: InvocationTargetException) {
-            Result.failure(e.targetException ?: e)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
+    private fun backupSummary(info: BackupInfo): String =
+        "${info.journals} tables, ${info.rows} lignes, ${info.images} images"
 
     fun exportBackup(uri: Uri) {
         viewModelScope.launch {
-            val result = invokeBackup("exportBackup", uri)
-            _backupFeedback.value = when {
-                result == null -> "Sauvegarde non disponible pour le moment."
-                result.isSuccess -> backupSummary(result.getOrNull())
-                    ?.let { "Sauvegarde exportée : $it." }
-                    ?: "Sauvegarde exportée avec succès."
-                else -> "Échec de la sauvegarde : ${result.exceptionOrNull()?.message ?: "erreur inconnue"}."
+            val manager = _backupManager.value
+            if (manager == null) {
+                _backupFeedback.value = "Sauvegarde non disponible pour le moment."
+                return@launch
+            }
+            val result = manager.exportBackup(uri)
+            _backupFeedback.value = if (result.isSuccess) {
+                "Sauvegarde exportée : ${backupSummary(result.getOrThrow())}."
+            } else {
+                "Échec de la sauvegarde : ${result.exceptionOrNull()?.message ?: "erreur inconnue"}."
             }
         }
     }
 
     fun importBackup(uri: Uri) {
         viewModelScope.launch {
-            val result = invokeBackup("importBackup", uri)
-            _backupFeedback.value = when {
-                result == null -> "Sauvegarde non disponible pour le moment."
-                result.isSuccess -> backupSummary(result.getOrNull())
-                    ?.let { "Sauvegarde restaurée : $it." }
-                    ?: "Sauvegarde restaurée avec succès."
-                else -> "Échec de la restauration : ${result.exceptionOrNull()?.message ?: "erreur inconnue"}."
+            val manager = _backupManager.value
+            if (manager == null) {
+                _backupFeedback.value = "Sauvegarde non disponible pour le moment."
+                return@launch
+            }
+            val result = manager.importBackup(uri)
+            _backupFeedback.value = if (result.isSuccess) {
+                "Sauvegarde restaurée : ${backupSummary(result.getOrThrow())}."
+            } else {
+                "Échec de la restauration : ${result.exceptionOrNull()?.message ?: "erreur inconnue"}."
             }
         }
     }
@@ -463,7 +363,7 @@ class JournalViewModel(
 
     class Factory(
         private val repository: JournalRepository,
-        private val backupManager: Any? = null
+        private val backupManager: BackupManager? = null
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {

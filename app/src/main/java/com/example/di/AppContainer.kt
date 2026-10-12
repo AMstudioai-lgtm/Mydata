@@ -3,6 +3,7 @@ package com.example.di
 import android.content.Context
 import com.example.BuildConfig
 import com.example.data.auth.SupabaseAuthService
+import com.example.data.backup.BackupManager
 import com.example.data.db.AppDatabase
 import com.example.data.repository.JournalRepository
 import com.example.data.session.SessionProvider
@@ -24,6 +25,8 @@ class AppContainer(context: Context) {
     private val sessionProvider: SessionProvider = authService.asSessionProvider()
 
     val journalRepository: JournalRepository = JournalRepository(database, sessionProvider)
+
+    val backupManager: BackupManager = BackupManager(appContext, database)
 
     /**
      * Les identifiants Supabase proviennent du BuildConfig, alimenté par le plugin `secrets`

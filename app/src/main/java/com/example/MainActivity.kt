@@ -32,7 +32,7 @@ class MainActivity : ComponentActivity() {
         val container = app.container
 
         val journalViewModel: JournalViewModel by viewModels {
-            JournalViewModel.Factory(container.journalRepository)
+            JournalViewModel.Factory(container.journalRepository, container.backupManager)
         }
 
         val authViewModel: AuthViewModel by viewModels {
