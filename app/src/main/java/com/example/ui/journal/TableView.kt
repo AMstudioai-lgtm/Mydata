@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -68,6 +69,9 @@ fun TableView(
     onMovePropertyToFront: (propId: String) -> Unit,
     onMovePropertyToBack: (propId: String) -> Unit,
     onOpenRow: (EntryRowEntity) -> Unit,
+    sortPropertyId: String? = null,
+    sortAscending: Boolean? = null,
+    onToggleSort: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     // Un seul état de scroll horizontal, partagé par l'en-tête, le corps et le pied :
@@ -122,6 +126,9 @@ fun TableView(
                 primaryColumnWidth = primaryColumnWidth,
                 regularColumnWidth = regularColumnWidth,
                 actionColumnWidth = actionColumnWidth,
+                sortPropertyId = sortPropertyId,
+                sortAscending = sortAscending,
+                onToggleSort = onToggleSort,
                 onDeleteProperty = onDeleteProperty,
                 onEditProperty = onEditProperty,
                 onMoveProperty = onMoveProperty,
@@ -277,30 +284,37 @@ fun TableView(
             }
 
             // Sticky Footer Row (Summary for number columns) : visible en permanence en bas.
-            TableFooterRow(
-                properties = properties,
-                rows = rows,
-                calculationMode = calculationMode,
-                numberStats = numberStats,
-                primaryColumnWidth = primaryColumnWidth,
-                regularColumnWidth = regularColumnWidth,
-                actionColumnWidth = actionColumnWidth,
-                onToggleCalculation = {
-                    calculationMode = if (calculationMode == "sum") "avg" else "sum"
-                },
-                modifier = Modifier.horizontalScroll(horizontalScrollState)
-            )
+            // imePadding sur le seul conteneur du pied : le clavier ne masque jamais les totaux
+            // sans pousser le reste de la page.
+            Box(modifier = Modifier.imePadding()) {
+                TableFooterRow(
+                    properties = properties,
+                    rows = rows,
+                    calculationMode = calculationMode,
+                    numberStats = numberStats,
+                    primaryColumnWidth = primaryColumnWidth,
+                    regularColumnWidth = regularColumnWidth,
+                    actionColumnWidth = actionColumnWidth,
+                    onToggleCalculation = {
+                        calculationMode = if (calculationMode == "sum") "avg" else "sum"
+                    },
+                    modifier = Modifier.horizontalScroll(horizontalScrollState)
+                )
+            }
         }
     }
 }
 
-/** Colonne d'en-tête : nom, badge de type et menu de la colonne. */
+/** Colonne d'en-tête : nom, badge de type et menu de la colonne. Appui = tri. */
 @Composable
 private fun ColumnHeaderCell(
     prop: PropertyEntity,
     index: Int,
     isLast: Boolean,
     width: Dp,
+    sortPropertyId: String?,
+    sortAscending: Boolean?,
+    onToggleSort: (String) -> Unit,
     onEditProperty: (PropertyEntity) -> Unit,
     onDeleteProperty: (String) -> Unit,
     onMoveProperty: (String, Int) -> Unit,
@@ -323,7 +337,9 @@ private fun ColumnHeaderCell(
             .width(width)
             .height(48.dp)
             .border(0.5.dp, AppColors.Border)
-            .padding(horizontal = 6.dp),
+            .clickable { onToggleSort(prop.id) }
+            .padding(horizontal = 6.dp)
+            .testTag("column_header_$index"),
         contentAlignment = Alignment.CenterStart
     ) {
         Row(
@@ -342,7 +358,11 @@ private fun ColumnHeaderCell(
             }
 
             Text(
-                text = prop.name,
+                text = prop.name + when {
+                    prop.id == sortPropertyId && sortAscending == true -> " ▲"
+                    prop.id == sortPropertyId && sortAscending == false -> " ▼"
+                    else -> ""
+                },
                 color = AppColors.TextPrimary,
                 fontSize = 13.sp,
                 fontWeight = if (isFirst) FontWeight.Bold else FontWeight.SemiBold,
@@ -520,6 +540,9 @@ private fun TableHeaderRow(
     primaryColumnWidth: Dp,
     regularColumnWidth: Dp,
     actionColumnWidth: Dp,
+    sortPropertyId: String?,
+    sortAscending: Boolean?,
+    onToggleSort: (String) -> Unit,
     onDeleteProperty: (String) -> Unit,
     onEditProperty: (PropertyEntity) -> Unit,
     onMoveProperty: (String, Int) -> Unit,
@@ -542,6 +565,9 @@ private fun TableHeaderRow(
                 index = index,
                 isLast = index == properties.lastIndex,
                 width = width,
+                sortPropertyId = sortPropertyId,
+                sortAscending = sortAscending,
+                onToggleSort = onToggleSort,
                 onEditProperty = onEditProperty,
                 onDeleteProperty = onDeleteProperty,
                 onMoveProperty = onMoveProperty,
@@ -703,4 +729,60 @@ private fun parseCellString(valuesJson: String, propId: String): String? {
     } catch (_: Exception) {
         null
     }
+}
+
+/** Filtre les lignes sur toutes les cellules en texte, insensible à la casse. */
+fun filterTableRows(
+    rows: List<EntryRowEntity>,
+    query: String
+): List<EntryRowEntity> {
+    val q = query.trim().lowercase()
+    if (q.isBlank()) return rows
+    return rows.filter { row ->
+        try {
+            val obj = JSONObject(row.valuesJson)
+            obj.keys().asSequence().any { key ->
+                obj.optString(key, "").lowercase().contains(q)
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
+}
+
+/**
+ * Trie les lignes : ordre de création si hors tri, numérique pour les colonnes
+ * `number`, alphabétique (insensible à la casse) sinon.
+ */
+fun sortTableRows(
+    rows: List<EntryRowEntity>,
+    properties: List<PropertyEntity>,
+    sortPropertyId: String?,
+    sortAscending: Boolean?
+): List<EntryRowEntity> {
+    if (sortPropertyId == null || sortAscending == null) {
+        return rows.sortedBy { it.createdAt }
+    }
+    val prop = properties.find { it.id == sortPropertyId }
+        ?: return rows.sortedBy { it.createdAt }
+    if (prop.kind == "number") {
+        val comparator = compareBy<EntryRowEntity>(
+            { parseNumberInput(parseCellString(it.valuesJson, prop.id)) == null },
+            { parseNumberInput(parseCellString(it.valuesJson, prop.id)) ?: Double.MAX_VALUE }
+        )
+        return if (sortAscending) rows.sortedWith(comparator) else rows.sortedWith(comparator.reversed())
+    }
+    val comparator = compareBy<EntryRowEntity> { parseCellString(it.valuesJson, prop.id)?.lowercase() ?: "" }
+    return if (sortAscending) rows.sortedWith(comparator) else rows.sortedWith(comparator.reversed())
+}
+
+/** Recherche puis tri : la liste réellement affichée par le tableau. */
+fun visibleTableRows(
+    rows: List<EntryRowEntity>,
+    properties: List<PropertyEntity>,
+    query: String,
+    sortPropertyId: String?,
+    sortAscending: Boolean?
+): List<EntryRowEntity> {
+    return sortTableRows(filterTableRows(rows, query), properties, sortPropertyId, sortAscending)
 }
