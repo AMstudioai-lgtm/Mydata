@@ -199,3 +199,21 @@ jobs:
         run: |
           set -euo pipefail
           gh release create "v$VERSION" "Mydata-$VERSION.apk" --title "Mydata v$VERSION" --notes-file changelog.md --target "$COMMIT"
+
+      - name: Nettoyer les anciennes releases
+        if: ${{ inputs.dry_run != true }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          # Ne garde que la release qui vient d'être publiée : les APK des
+          # anciennes versions sont supprimés pour libérer de l'espace.
+          # Les tags Git sont conservés (historique, coût négligeable).
+          # Placé APRÈS la publication : si le build échoue, l'ancienne
+          # version reste disponible pour les utilisateurs.
+          for tag in $(gh release list --limit 100 --json tagName --jq '.[].tagName'); do
+            if [ "$tag" != "v$VERSION" ]; then
+              gh release delete "$tag" --yes
+            fi
+          done
