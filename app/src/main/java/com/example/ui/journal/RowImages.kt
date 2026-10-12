@@ -20,8 +20,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -320,18 +318,18 @@ fun RowImagesSection(
             key(image.uri ?: image.remote ?: index) {
                 Spacer(modifier = Modifier.height(12.dp))
                 Column(modifier = Modifier.fillMaxWidth()) {
+                    // Pas de cadre imposé : le conteneur épouse la hauteur réelle
+                    // de l'image, affichée en entier (Fit), sans rognage.
                     Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(16f / 9f)
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         when {
                             image.uri != null -> ImageThumbnail(
                                 uri = image.uri,
-                                modifier = Modifier.fillMaxSize()
+                                modifier = Modifier.fillMaxWidth()
                             )
-                            image.remote != null -> CloudPlaceholder(modifier = Modifier.fillMaxSize())
-                            else -> UnavailablePlaceholder(modifier = Modifier.fillMaxSize())
+                            image.remote != null -> CloudPlaceholder(modifier = Modifier.fillMaxWidth())
+                            else -> UnavailablePlaceholder(modifier = Modifier.fillMaxWidth())
                         }
 
                         // Croix de suppression, dans un badge sombre pour rester lisible
@@ -467,7 +465,7 @@ private fun CaptionField(
     )
 }
 
-/** Vignette d'une image locale, chargée puis recadrée. Placeholder si illisible. */
+/** Image locale affichée en entier, sans cadre ni rognage. Placeholder si illisible. */
 @Composable
 private fun ImageThumbnail(uri: String, modifier: Modifier = Modifier) {
     val context = LocalContext.current
@@ -477,19 +475,12 @@ private fun ImageThumbnail(uri: String, modifier: Modifier = Modifier) {
 
     val loaded = bitmap
     if (loaded != null) {
-        Box(
+        Image(
+            bitmap = loaded.asImageBitmap(),
+            contentDescription = "Image de la ligne",
+            contentScale = ContentScale.Fit,
             modifier = modifier
-                .background(AppColors.Background, RoundedCornerShape(8.dp))
-                .border(1.dp, AppColors.Border, RoundedCornerShape(8.dp)),
-            contentAlignment = Alignment.Center
-        ) {
-            Image(
-                bitmap = loaded.asImageBitmap(),
-                contentDescription = "Image de la ligne",
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-        }
+        )
     } else {
         UnavailablePlaceholder(modifier = modifier)
     }
