@@ -135,10 +135,54 @@ jobs:
           set -euo pipefail
           PREV=$(git describe --tags --abbrev=0 --match "v*" HEAD^ 2>/dev/null || true)
           if [ -n "$PREV" ]; then
-            git log --pretty=format:"- %s" "$PREV"..HEAD | sed "/^$/d" > changelog.md
+            LOG=$(git log --pretty=format:"%s" "$PREV"..HEAD)
           else
-            echo "- Première release publiée" > changelog.md
+            LOG=""
           fi
+
+          # Classement des commits en deux rubriques simples.
+          # feat: (ou nouveauté détectée) -> Nouveautés, fix: (ou mot-clé de
+          # correction) -> Bugs corrigés. Commits internes ignorés (merge,
+          # chore, docs, ci, build, test, bump [skip ci]).
+          FEATS=""
+          FIXES=""
+          while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            case "$line" in
+              "Merge "*|*"[skip ci]"*) continue ;;
+            esac
+            clean=$(echo "$line" | sed -E 's/^(feat|fix)(\([^)]*\))?(!)?:[[:space:]]*//I')
+            case "$line" in
+              fix:*|FIX:*)
+                FIXES="${FIXES}- ${clean}\n" ;;
+              feat:*|FEAT:*)
+                FEATS="${FEATS}- ${clean}\n" ;;
+              *)
+                if echo "$line" | grep -qiE "fix|bug|corrige|répare|repare|plantage|panne|erreur"; then
+                  FIXES="${FIXES}- ${clean}\n"
+                elif echo "$line" | grep -qiE "^(docs|ci|build|test|refactor|style|perf)[:( ]"; then
+                  continue
+                else
+                  FEATS="${FEATS}- ${clean}\n"
+                fi
+                ;;
+            esac
+          done <<< "$LOG"
+
+          {
+            if [ -n "$FEATS" ]; then
+              echo "## Nouveautés"
+              echo ""
+              printf "%b" "$FEATS" | awk '!seen[$0]++'
+              echo ""
+            fi
+            if [ -n "$FIXES" ]; then
+              echo "## Bugs corrigés"
+              echo ""
+              printf "%b" "$FIXES" | awk '!seen[$0]++'
+              echo ""
+            fi
+          } > changelog.md
           if [ "$SIGNING" = "ephemeral" ]; then
             echo "" >> changelog.md
             echo "> [!WARNING]" >> changelog.md
