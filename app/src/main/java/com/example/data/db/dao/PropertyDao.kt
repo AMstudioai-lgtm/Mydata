@@ -38,6 +38,14 @@ interface PropertyDao {
     @Query("UPDATE properties SET deleted_at = :deletedAt, updated_at = :deletedAt WHERE id = :id AND deleted_at IS NULL")
     suspend fun softDelete(id: String, deletedAt: Long)
 
+    // Purge en cascade logique : appelée à la purge du journal parent.
+    @Query("DELETE FROM properties WHERE journal_id = :journalId")
+    suspend fun purgeByJournal(journalId: String)
+
+    // Lecture complète pour l'export de sauvegarde.
+    @Query("SELECT * FROM properties")
+    suspend fun getAllProperties(): List<PropertyEntity>
+
     @Query("SELECT * FROM properties WHERE user_id = :userId AND updated_at > :since ORDER BY updated_at ASC")
     suspend fun pendingPush(userId: String, since: Long): List<PropertyEntity>
 

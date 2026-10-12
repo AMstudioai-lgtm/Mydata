@@ -6,6 +6,7 @@ import com.example.data.db.entity.JournalEntity
 import com.example.data.db.entity.PropertyEntity
 import com.example.data.resolvePropertyFormat
 import com.example.data.session.SessionProvider
+import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
 import org.json.JSONArray
 import org.json.JSONObject
@@ -179,5 +180,38 @@ class JournalRepository(
 
     suspend fun deleteRow(rowId: String) {
         entryRowDao.softDelete(rowId, System.currentTimeMillis())
+    }
+
+    // --- Corbeille -----------------------------------------------------------
+    // Les suppressions restent logiques (deleted_at) : restauration possible,
+    // purge définitive en cascade (lignes + propriétés du journal).
+
+    fun watchTrashedJournals(): Flow<List<JournalEntity>> =
+        journalDao.watchTrashedJournals()
+
+    suspend fun restoreJournal(id: String) {
+        journalDao.restoreJournal(id, System.currentTimeMillis())
+    }
+
+    suspend fun purgeJournal(id: String) {
+        db.withTransaction {
+            entryRowDao.purgeByJournal(id)
+            propertyDao.purgeByJournal(id)
+            journalDao.purgeJournal(id)
+        }
+    }
+
+    fun watchTrashedRows(journalId: String): Flow<List<EntryRowEntity>> =
+        entryRowDao.watchTrashedRows(journalId)
+
+    fun watchAllTrashedRows(): Flow<List<EntryRowEntity>> =
+        entryRowDao.watchAllTrashedRows()
+
+    suspend fun restoreRow(id: String) {
+        entryRowDao.restoreRow(id, System.currentTimeMillis())
+    }
+
+    suspend fun purgeRow(id: String) {
+        entryRowDao.purgeRow(id)
     }
 }

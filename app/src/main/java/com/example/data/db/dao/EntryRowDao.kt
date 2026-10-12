@@ -31,6 +31,27 @@ interface EntryRowDao {
     @Query("UPDATE entry_rows SET deleted_at = :deletedAt, updated_at = :deletedAt WHERE id = :id AND deleted_at IS NULL")
     suspend fun softDelete(id: String, deletedAt: Long)
 
+    // Corbeille par journal, puis corbeille globale (tous journaux confondus).
+    @Query("SELECT * FROM entry_rows WHERE journal_id = :journalId AND deleted_at IS NOT NULL ORDER BY deleted_at DESC")
+    fun watchTrashedRows(journalId: String): Flow<List<EntryRowEntity>>
+
+    @Query("SELECT * FROM entry_rows WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC")
+    fun watchAllTrashedRows(): Flow<List<EntryRowEntity>>
+
+    @Query("UPDATE entry_rows SET deleted_at = NULL, updated_at = :updatedAt WHERE id = :id")
+    suspend fun restoreRow(id: String, updatedAt: Long)
+
+    @Query("DELETE FROM entry_rows WHERE id = :id")
+    suspend fun purgeRow(id: String)
+
+    // Purge en cascade logique : appelée à la purge du journal parent.
+    @Query("DELETE FROM entry_rows WHERE journal_id = :journalId")
+    suspend fun purgeByJournal(journalId: String)
+
+    // Lecture complète pour l'export de sauvegarde (vivantes + corbeille).
+    @Query("SELECT * FROM entry_rows")
+    suspend fun getAllRows(): List<EntryRowEntity>
+
     @Query("SELECT * FROM entry_rows WHERE user_id = :userId AND updated_at > :since ORDER BY updated_at ASC")
     suspend fun pendingPush(userId: String, since: Long): List<EntryRowEntity>
 
