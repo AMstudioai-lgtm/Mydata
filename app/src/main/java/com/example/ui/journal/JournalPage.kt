@@ -17,9 +17,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LibraryBooks
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ViewColumn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -27,6 +28,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -45,7 +48,6 @@ import androidx.compose.ui.unit.sp
 import com.example.data.db.entity.EntryRowEntity
 import com.example.data.db.entity.JournalEntity
 import com.example.data.db.entity.PropertyEntity
-import com.example.data.FORMAT_PLAIN
 import com.example.ui.theme.AppColors
 
 @Composable
@@ -66,11 +68,28 @@ fun JournalPage(
     onMovePropertyToFront: (propId: String) -> Unit,
     onMovePropertyToBack: (propId: String) -> Unit,
     onOpenRow: (EntryRowEntity) -> Unit,
+    query: String = "",
+    onQueryChange: (String) -> Unit = {},
+    sortPropertyId: String? = null,
+    sortAscending: Boolean? = null,
+    onToggleSort: (String) -> Unit = {},
+    onRenameJournal: (String, String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     var showAddPropertyDialog by remember { mutableStateOf(false) }
     var propertyToEdit by remember { mutableStateOf<PropertyEntity?>(null) }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+    var showRenameDialog by remember { mutableStateOf(false) }
+
+    // État local de repli : Shell ne câble pas encore le ViewModel, donc la page
+    // reste pilotable seule tout en notifiant le parent pour le câblage futur.
+    var localQuery by remember(query) { mutableStateOf(query) }
+    var localSortId by remember(sortPropertyId) { mutableStateOf(sortPropertyId) }
+    var localSortAsc by remember(sortAscending) { mutableStateOf(sortAscending) }
+    val effectiveQuery = localQuery
+    val visibleRows = remember(rows, properties, effectiveQuery, localSortId, localSortAsc) {
+        visibleTableRows(rows, properties, effectiveQuery, localSortId, localSortAsc)
+    }
 
     if (!hasAnyJournals || selectedJournal == null) {
         // Empty state when no journals exist
@@ -185,9 +204,20 @@ fun JournalPage(
                             fontWeight = FontWeight.SemiBold,
                             color = AppColors.TextPrimary
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
+                        IconButton(
+                            onClick = { showRenameDialog = true },
+                            modifier = Modifier.size(32.dp).testTag("rename_journal_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Renommer la database",
+                                tint = AppColors.TextSecondary,
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "(${rows.size} lignes)",
+                            text = "(${visibleRows.size} lignes)",
                             fontSize = 12.sp,
                             color = AppColors.TextMuted
                         )
@@ -206,6 +236,41 @@ fun JournalPage(
                         )
                     }
                 }
+            }
+
+            // Recherche plein-texte au-dessus du tableau.
+            if (properties.isNotEmpty()) {
+                OutlinedTextField(
+                    value = effectiveQuery,
+                    onValueChange = {
+                        localQuery = it
+                        onQueryChange(it)
+                    },
+                    placeholder = { Text("Rechercher…", color = AppColors.TextMuted, fontSize = 13.sp) },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = null,
+                            tint = AppColors.TextMuted,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    },
+                    singleLine = true,
+                    textStyle = androidx.compose.ui.text.TextStyle(
+                        color = AppColors.TextPrimary,
+                        fontSize = 13.sp
+                    ),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = AppColors.Accent,
+                        unfocusedBorderColor = AppColors.Border,
+                        cursorColor = AppColors.Accent
+                    ),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                        .testTag("table_search_field")
+                )
             }
 
             // Body: Empty properties OR TableView
@@ -263,33 +328,12 @@ fun JournalPage(
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text("Ajouter propriété")
                             }
-
-                            // Quick preset button for convenience
-                            OutlinedButton(
-                                onClick = {
-                                    onAddProperty("Nom", "text", emptyList(), null)
-                                    onAddProperty("Catégorie", "select", listOf("Projet", "Finance", "Tâche", "Autre"), null)
-                                    onAddProperty("Statut", "select", listOf("À faire", "En cours", "Terminé"), null)
-                                    onAddProperty("Montant", "number", emptyList(), FORMAT_PLAIN)
-                                    onAddProperty("Date", "date", emptyList(), null)
-                                },
-                                border = BorderStroke(1.dp, AppColors.Border),
-                                colors = ButtonDefaults.outlinedButtonColors(
-                                    contentColor = AppColors.AccentLight
-                                ),
-                                shape = RoundedCornerShape(6.dp),
-                                modifier = Modifier.testTag("apply_preset_button")
-                            ) {
-                                Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Modèle Standard")
-                            }
                         }
                     }
                 } else {
                     TableView(
                         properties = properties,
-                        rows = rows,
+                        rows = visibleRows,
                         onUpdateCell = onUpdateCell,
                         onDeleteRow = onDeleteRow,
                         onDeleteProperty = onDeleteProperty,
@@ -298,6 +342,21 @@ fun JournalPage(
                         onMovePropertyToFront = onMovePropertyToFront,
                         onMovePropertyToBack = onMovePropertyToBack,
                         onOpenRow = onOpenRow,
+                        sortPropertyId = localSortId,
+                        sortAscending = localSortAsc,
+                        onToggleSort = { propId ->
+                            if (localSortId != propId) {
+                                localSortId = propId
+                                localSortAsc = true
+                            } else when (localSortAsc) {
+                                true -> localSortAsc = false
+                                else -> {
+                                    localSortId = null
+                                    localSortAsc = null
+                                }
+                            }
+                            onToggleSort(propId)
+                        },
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -427,6 +486,68 @@ fun JournalPage(
                     )
                 ) {
                     Text("Supprimer")
+                }
+            }
+        )
+    }
+
+    // Rename Journal Dialog : nom vide refusé (bouton désactivé).
+    if (showRenameDialog && selectedJournal != null) {
+        var renameText by remember(selectedJournal.id) { mutableStateOf(selectedJournal.name) }
+        AlertDialog(
+            onDismissRequest = { showRenameDialog = false },
+            containerColor = AppColors.Panel,
+            title = {
+                Text(
+                    text = "Renommer la database",
+                    color = AppColors.TextPrimary,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            },
+            text = {
+                OutlinedTextField(
+                    value = renameText,
+                    onValueChange = { renameText = it },
+                    singleLine = true,
+                    textStyle = androidx.compose.ui.text.TextStyle(
+                        color = AppColors.TextPrimary,
+                        fontSize = 14.sp
+                    ),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = AppColors.Accent,
+                        unfocusedBorderColor = AppColors.Border,
+                        cursorColor = AppColors.Accent
+                    ),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("rename_journal_field")
+                )
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showRenameDialog = false }
+                ) {
+                    Text("Annuler", color = AppColors.TextSecondary)
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onRenameJournal(selectedJournal.id, renameText.trim())
+                        showRenameDialog = false
+                    },
+                    enabled = renameText.isNotBlank(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = AppColors.Accent,
+                        contentColor = AppColors.TextPrimary,
+                        disabledContainerColor = AppColors.Panel,
+                        disabledContentColor = AppColors.TextMuted
+                    ),
+                    modifier = Modifier.testTag("rename_journal_confirm")
+                ) {
+                    Text("Renommer")
                 }
             }
         )
