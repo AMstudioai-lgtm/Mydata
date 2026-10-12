@@ -1,5 +1,6 @@
 package com.example.ui.shell
 
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
@@ -26,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.ExpandLess
@@ -76,6 +78,7 @@ import com.example.data.sync.SyncOutcome
 import com.example.data.sync.SyncStatus
 import com.example.ui.settings.SettingsPage
 import com.example.ui.theme.AppColors
+import com.example.ui.trash.TrashPage
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -110,9 +113,21 @@ fun Shell(
     syncOutcome: SyncOutcome?,
     isSyncAvailable: Boolean,
     onSync: () -> Unit,
-    onDismissSyncFeedback: () -> Unit
+    onDismissSyncFeedback: () -> Unit,
+    trashedJournals: List<JournalEntity>,
+    trashedRows: List<EntryRowEntity>,
+    onRestoreJournal: (String) -> Unit,
+    onPurgeJournal: (String) -> Unit,
+    onRestoreRow: (String) -> Unit,
+    onPurgeRow: (String) -> Unit,
+    backupFeedback: String?,
+    onExportBackup: (Uri) -> Unit,
+    onImportBackup: (Uri) -> Unit,
+    onClearBackupFeedback: () -> Unit,
+    isAutoSyncEnabled: Boolean,
+    onAutoSyncChange: (Boolean) -> Unit
 ) {
-    var currentPageIndex by remember { mutableIntStateOf(0) } // 0 = Journal, 1 = Settings
+    var currentPageIndex by remember { mutableIntStateOf(0) } // 0 = Journal, 1 = Corbeille, 2 = Paramètres
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val coroutineScope = rememberCoroutineScope()
 
@@ -342,7 +357,7 @@ fun Shell(
                 HorizontalDivider(color = AppColors.Border)
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Section "Paramètres"
+                // Section "Corbeille"
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -351,7 +366,7 @@ fun Shell(
                             currentPageIndex = 1
                             coroutineScope.launch { drawerState.close() }
                         }
-                        .testTag("drawer_settings_button"),
+                        .testTag("drawer_trash_button"),
                     shape = RoundedCornerShape(6.dp),
                     color = if (currentPageIndex == 1) AppColors.SelectedBg else androidx.compose.ui.graphics.Color.Transparent
                 ) {
@@ -362,9 +377,44 @@ fun Shell(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Settings,
+                            imageVector = Icons.Default.Delete,
                             contentDescription = null,
                             tint = if (currentPageIndex == 1) AppColors.TextPrimary else AppColors.TextSecondary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = "Corbeille",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = if (currentPageIndex == 1) AppColors.TextPrimary else AppColors.TextSecondary
+                        )
+                    }
+                }
+
+                // Section "Paramètres"
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp)
+                        .clickable {
+                            currentPageIndex = 2
+                            coroutineScope.launch { drawerState.close() }
+                        }
+                        .testTag("drawer_settings_button"),
+                    shape = RoundedCornerShape(6.dp),
+                    color = if (currentPageIndex == 2) AppColors.SelectedBg else androidx.compose.ui.graphics.Color.Transparent
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 10.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = null,
+                            tint = if (currentPageIndex == 2) AppColors.TextPrimary else AppColors.TextSecondary,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(10.dp))
@@ -372,7 +422,7 @@ fun Shell(
                             text = "Paramètres",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium,
-                            color = if (currentPageIndex == 1) AppColors.TextPrimary else AppColors.TextSecondary
+                            color = if (currentPageIndex == 2) AppColors.TextPrimary else AppColors.TextSecondary
                         )
                     }
                 }
@@ -409,7 +459,7 @@ fun Shell(
                             text = if (currentPageIndex == 0) {
                                 if (selectedJournal != null) "Database — ${selectedJournal.name}"
                                 else "Database"
-                            } else "Paramètres",
+                            } else if (currentPageIndex == 1) "Corbeille" else "Paramètres",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Medium,
                             maxLines = 1,
@@ -417,11 +467,24 @@ fun Shell(
                         )
                     },
                     actions = {
-                        AuthButton(
-                            authState = authState,
-                            onClick = { showAuthDialog = true },
-                            modifier = Modifier.padding(end = 8.dp)
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(
+                                onClick = { onAutoSyncChange(!isAutoSyncEnabled) },
+                                modifier = Modifier.testTag("autosync_toggle")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CloudSync,
+                                    contentDescription = if (isAutoSyncEnabled) "Synchro auto activée" else "Synchro auto désactivée",
+                                    tint = if (isAutoSyncEnabled) AppColors.Accent else AppColors.TextMuted,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            AuthButton(
+                                authState = authState,
+                                onClick = { showAuthDialog = true },
+                                modifier = Modifier.padding(end = 8.dp)
+                            )
+                        }
                     }
                 )
             }
@@ -450,6 +513,17 @@ fun Shell(
                         onUpdateCell = onUpdateCell,
                         onDeleteRow = onDeleteRow
                     )
+                } else if (currentPageIndex == 1) {
+                    TrashPage(
+                        trashedJournals = trashedJournals,
+                        allJournals = journals,
+                        trashedRows = trashedRows,
+                        onRestoreJournal = onRestoreJournal,
+                        onPurgeJournal = onPurgeJournal,
+                        onRestoreRow = onRestoreRow,
+                        onPurgeRow = onPurgeRow,
+                        modifier = Modifier
+                    )
                 } else {
                     SettingsPage(
                         authState = authState,
@@ -459,7 +533,11 @@ fun Shell(
                         syncOutcome = syncOutcome,
                         isSyncAvailable = isSyncAvailable,
                         onSync = onSync,
-                        onDismissSyncFeedback = onDismissSyncFeedback
+                        onDismissSyncFeedback = onDismissSyncFeedback,
+                        backupFeedback = backupFeedback,
+                        onExportBackup = onExportBackup,
+                        onImportBackup = onImportBackup,
+                        onClearBackupFeedback = onClearBackupFeedback
                     )
                 }
             }
