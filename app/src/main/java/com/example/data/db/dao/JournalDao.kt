@@ -40,6 +40,20 @@ interface JournalDao {
     @Query("UPDATE journals SET deleted_at = :deletedAt, updated_at = :deletedAt WHERE id = :id AND deleted_at IS NULL")
     suspend fun softDelete(id: String, deletedAt: Long)
 
+    // Corbeille : les supprimés logiques restent lisibles pour restauration ou purge.
+    @Query("SELECT * FROM journals WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC")
+    fun watchTrashedJournals(): Flow<List<JournalEntity>>
+
+    @Query("UPDATE journals SET deleted_at = NULL, updated_at = :updatedAt WHERE id = :id")
+    suspend fun restoreJournal(id: String, updatedAt: Long)
+
+    @Query("DELETE FROM journals WHERE id = :id")
+    suspend fun purgeJournal(id: String)
+
+    // Lecture complète pour l'export de sauvegarde (vivants + corbeille).
+    @Query("SELECT * FROM journals")
+    suspend fun getAllJournals(): List<JournalEntity>
+
     @Query("SELECT * FROM journals WHERE user_id = :userId AND updated_at > :since ORDER BY updated_at ASC")
     suspend fun pendingPush(userId: String, since: Long): List<JournalEntity>
 

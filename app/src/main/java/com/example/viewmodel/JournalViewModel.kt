@@ -1,13 +1,17 @@
 package com.example.viewmodel
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.data.db.entity.EntryRowEntity
 import com.example.data.db.entity.JournalEntity
 import com.example.data.db.entity.PropertyEntity
+import com.example.data.backup.BackupInfo
+import com.example.data.backup.BackupManager
 import com.example.data.repository.JournalRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -18,9 +22,16 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+/** Tri du tableau : colonne ciblée + sens. `ascending == null` = ordre de création. */
+data class TableSort(
+    val propertyId: String? = null,
+    val ascending: Boolean? = null
+)
+
 @OptIn(ExperimentalCoroutinesApi::class)
 class JournalViewModel(
-    private val repository: JournalRepository
+    private val repository: JournalRepository,
+    backupManager: BackupManager? = null
 ) : ViewModel() {
 
     private val _currentUserId = MutableStateFlow<String?>(null)
@@ -82,6 +93,58 @@ class JournalViewModel(
             initialValue = emptyList()
         )
 
+    // Recherche plein-texte sur les cellules. `recherche` est un alias de `query`.
+    private val _query = MutableStateFlow("")
+    val query: StateFlow<String> = _query.asStateFlow()
+    val recherche: StateFlow<String> get() = query
+
+    fun setQuery(value: String) {
+        _query.value = value
+    }
+
+    fun setRecherche(value: String) {
+        _query.value = value
+    }
+
+    fun onQueryChange(value: String) {
+        _query.value = value
+    }
+
+    // Tri du tableau : appui cyclique croissant -> décroissant -> création.
+    private val _sortPropertyId = MutableStateFlow<String?>(null)
+    val sortPropertyId: StateFlow<String?> = _sortPropertyId.asStateFlow()
+
+    private val _sortAscending = MutableStateFlow<Boolean?>(null)
+    val sortAscending: StateFlow<Boolean?> = _sortAscending.asStateFlow()
+
+    val tri: StateFlow<TableSort> = combine(_sortPropertyId, _sortAscending) { id, asc ->
+        TableSort(propertyId = id, ascending = asc)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = TableSort()
+    )
+
+    fun toggleSort(propertyId: String) {
+        if (_sortPropertyId.value != propertyId) {
+            _sortPropertyId.value = propertyId
+            _sortAscending.value = true
+            return
+        }
+        when (_sortAscending.value) {
+            true -> _sortAscending.value = false
+            else -> {
+                _sortPropertyId.value = null
+                _sortAscending.value = null
+            }
+        }
+    }
+
+    fun clearSort() {
+        _sortPropertyId.value = null
+        _sortAscending.value = null
+    }
+
     fun selectJournal(id: String) {
         _selectedJournalId.value = id
     }
@@ -99,6 +162,95 @@ class JournalViewModel(
             if (_selectedJournalId.value == id) {
                 val remaining = journals.value.filter { it.id != id }
                 _selectedJournalId.value = remaining.firstOrNull()?.id
+            }
+        }
+    }
+
+    fun renameJournal(id: String, name: String) {
+        if (name.isBlank()) return
+        viewModelScope.launch {
+            repository.renameJournal(id, name.trim())
+        }
+    }
+
+    val trashedJournals: StateFlow<List<JournalEntity>> =
+        repository.watchTrashedJournals()
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = emptyList()
+            )
+
+    val trashedRows: StateFlow<List<EntryRowEntity>> =
+        repository.watchAllTrashedRows()
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = emptyList()
+            )
+
+    fun trashedRowsForJournal(journalId: String): Flow<List<EntryRowEntity>> =
+        repository.watchTrashedRows(journalId)
+
+    fun restoreJournal(id: String) {
+        viewModelScope.launch { repository.restoreJournal(id) }
+    }
+
+    fun purgeJournal(id: String) {
+        viewModelScope.launch { repository.purgeJournal(id) }
+    }
+
+    fun restoreRow(id: String) {
+        viewModelScope.launch { repository.restoreRow(id) }
+    }
+
+    fun purgeRow(id: String) {
+        viewModelScope.launch { repository.purgeRow(id) }
+    }
+
+    private val _backupManager = MutableStateFlow<BackupManager?>(backupManager)
+    fun setBackupManager(manager: BackupManager?) {
+        _backupManager.value = manager
+    }
+
+    private val _backupFeedback = MutableStateFlow<String?>(null)
+    val backupFeedback: StateFlow<String?> = _backupFeedback.asStateFlow()
+
+    fun clearBackupFeedback() {
+        _backupFeedback.value = null
+    }
+
+    private fun backupSummary(info: BackupInfo): String =
+        "${info.journals} tables, ${info.rows} lignes, ${info.images} images"
+
+    fun exportBackup(uri: Uri) {
+        viewModelScope.launch {
+            val manager = _backupManager.value
+            if (manager == null) {
+                _backupFeedback.value = "Sauvegarde non disponible pour le moment."
+                return@launch
+            }
+            val result = manager.exportBackup(uri)
+            _backupFeedback.value = if (result.isSuccess) {
+                "Sauvegarde exportée : ${backupSummary(result.getOrThrow())}."
+            } else {
+                "Échec de la sauvegarde : ${result.exceptionOrNull()?.message ?: "erreur inconnue"}."
+            }
+        }
+    }
+
+    fun importBackup(uri: Uri) {
+        viewModelScope.launch {
+            val manager = _backupManager.value
+            if (manager == null) {
+                _backupFeedback.value = "Sauvegarde non disponible pour le moment."
+                return@launch
+            }
+            val result = manager.importBackup(uri)
+            _backupFeedback.value = if (result.isSuccess) {
+                "Sauvegarde restaurée : ${backupSummary(result.getOrThrow())}."
+            } else {
+                "Échec de la restauration : ${result.exceptionOrNull()?.message ?: "erreur inconnue"}."
             }
         }
     }
@@ -209,10 +361,13 @@ class JournalViewModel(
         }
     }
 
-    class Factory(private val repository: JournalRepository) : ViewModelProvider.Factory {
+    class Factory(
+        private val repository: JournalRepository,
+        private val backupManager: BackupManager? = null
+    ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            return JournalViewModel(repository) as T
+            return JournalViewModel(repository, backupManager) as T
         }
     }
 }

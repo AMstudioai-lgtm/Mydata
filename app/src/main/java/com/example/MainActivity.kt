@@ -1,5 +1,7 @@
 package com.example
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -12,8 +14,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.auth.AuthState
+import com.example.data.update.UpdateInfo
 import com.example.ui.shell.Shell
 import com.example.ui.theme.AppTheme
+import com.example.ui.update.UpdateDialog
 import com.example.viewmodel.AuthViewModel
 import com.example.viewmodel.JournalViewModel
 import com.example.viewmodel.SyncViewModel
@@ -28,7 +32,7 @@ class MainActivity : ComponentActivity() {
         val container = app.container
 
         val journalViewModel: JournalViewModel by viewModels {
-            JournalViewModel.Factory(container.journalRepository)
+            JournalViewModel.Factory(container.journalRepository, container.backupManager)
         }
 
         val authViewModel: AuthViewModel by viewModels {
@@ -54,6 +58,33 @@ class MainActivity : ComponentActivity() {
             val syncStatus by syncViewModel.status.collectAsStateWithLifecycle()
             val syncOutcome by syncViewModel.lastOutcome.collectAsStateWithLifecycle()
             val isSyncAvailable by syncViewModel.isAvailable.collectAsStateWithLifecycle()
+
+            val trashedJournals by journalViewModel.trashedJournals.collectAsStateWithLifecycle()
+            val trashedRows by journalViewModel.trashedRows.collectAsStateWithLifecycle()
+            val backupFeedback by journalViewModel.backupFeedback.collectAsStateWithLifecycle()
+
+            // Interrupteur « synchro auto », persisté en SharedPreferences.
+            val syncPrefs = remember { getSharedPreferences("myapp_sync_prefs", MODE_PRIVATE) }
+            var isAutoSyncEnabled by remember {
+                mutableStateOf(syncPrefs.getBoolean("auto_sync", false))
+            }
+
+            // Synchro auto au premier lancement : une seule fois (garde-fou en
+            // mémoire), quand l'option est activée et la session active.
+            var autoSyncFired by remember { mutableStateOf(false) }
+            LaunchedEffect(authState, isAutoSyncEnabled) {
+                if (!autoSyncFired && isAutoSyncEnabled && authState is AuthState.LoggedIn) {
+                    autoSyncFired = true
+                    syncViewModel.syncNow()
+                }
+            }
+
+            // Vérification de mise à jour au premier lancement uniquement.
+            var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
+            var updateDismissed by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) {
+                updateInfo = container.updateChecker.check(BuildConfig.VERSION_NAME)
+            }
 
             // Propage le compte courant vers le ViewModel des journaux pour que
             // chaque compte ne voie que ses données (+ orphelines) via flatMapLatest.
@@ -112,8 +143,35 @@ class MainActivity : ComponentActivity() {
                     syncOutcome = syncOutcome,
                     isSyncAvailable = isSyncAvailable,
                     onSync = { syncViewModel.syncNow() },
-                    onDismissSyncFeedback = { syncViewModel.clearFeedback() }
+                    onDismissSyncFeedback = { syncViewModel.clearFeedback() },
+                    trashedJournals = trashedJournals,
+                    trashedRows = trashedRows,
+                    onRestoreJournal = { id -> journalViewModel.restoreJournal(id) },
+                    onPurgeJournal = { id -> journalViewModel.purgeJournal(id) },
+                    onRestoreRow = { id -> journalViewModel.restoreRow(id) },
+                    onPurgeRow = { id -> journalViewModel.purgeRow(id) },
+                    backupFeedback = backupFeedback,
+                    onExportBackup = { uri -> journalViewModel.exportBackup(uri) },
+                    onImportBackup = { uri -> journalViewModel.importBackup(uri) },
+                    onClearBackupFeedback = { journalViewModel.clearBackupFeedback() },
+                    isAutoSyncEnabled = isAutoSyncEnabled,
+                    onAutoSyncChange = { enabled ->
+                        syncPrefs.edit().putBoolean("auto_sync", enabled).apply()
+                        isAutoSyncEnabled = enabled
+                    }
                 )
+
+                val pendingUpdate = updateInfo
+                if (pendingUpdate != null && !updateDismissed) {
+                    UpdateDialog(
+                        info = pendingUpdate,
+                        onDownload = {
+                            updateDismissed = true
+                            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(pendingUpdate.url)))
+                        },
+                        onDismiss = { updateDismissed = true }
+                    )
+                }
             }
         }
     }
