@@ -140,10 +140,10 @@ jobs:
             LOG=""
           fi
 
-          # Classement des commits en deux rubriques simples.
-          # feat: (ou nouveauté détectée) -> Nouveautés, fix: (ou mot-clé de
-          # correction) -> Bugs corrigés. Commits internes ignorés (merge,
-          # chore, docs, ci, build, test, bump [skip ci]).
+          # Classement des commits en deux rubriques simples : la note liste
+          # des fonctions, sans jargon. Tout préfixe technique est retiré.
+          # feat: -> Nouveautés, fix: -> Bugs corrigés, commits internes
+          # (merge, chore, docs, ci, build, test, bump [skip ci]) ignorés.
           FEATS=""
           FIXES=""
           while IFS= read -r line; do
@@ -151,17 +151,17 @@ jobs:
             case "$line" in
               "Merge "*|*"[skip ci]"*) continue ;;
             esac
-            clean=$(echo "$line" | sed -E 's/^(feat|fix)(\([^)]*\))?(!)?:[[:space:]]*//I')
+            clean=$(echo "$line" | sed -E 's/^[A-Za-z0-9._-]+(\([^)]*\))?(!)?:[[:space:]]*//')
             case "$line" in
-              fix:*|FIX:*)
-                FIXES="${FIXES}- ${clean}\n" ;;
               feat:*|FEAT:*)
                 FEATS="${FEATS}- ${clean}\n" ;;
+              fix:*|FIX:*)
+                FIXES="${FIXES}- ${clean}\n" ;;
+              docs:*|ci:*|build:*|test:*|refactor:*|style:*|perf:*|chore:*|DOCS:*|CI:*)
+                continue ;;
               *)
                 if echo "$line" | grep -qiE "fix|bug|corrige|répare|repare|plantage|panne|erreur"; then
                   FIXES="${FIXES}- ${clean}\n"
-                elif echo "$line" | grep -qiE "^(docs|ci|build|test|refactor|style|perf)[:( ]"; then
-                  continue
                 else
                   FEATS="${FEATS}- ${clean}\n"
                 fi
@@ -199,3 +199,21 @@ jobs:
         run: |
           set -euo pipefail
           gh release create "v$VERSION" "Mydata-$VERSION.apk" --title "Mydata v$VERSION" --notes-file changelog.md --target "$COMMIT"
+
+      - name: Nettoyer les anciennes releases
+        if: ${{ inputs.dry_run != true }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          # Ne garde que la release qui vient d'être publiée : les APK des
+          # anciennes versions sont supprimés pour libérer de l'espace.
+          # Les tags Git sont conservés (historique, coût négligeable).
+          # Placé APRÈS la publication : si le build échoue, l'ancienne
+          # version reste disponible pour les utilisateurs.
+          for tag in $(gh release list --limit 100 --json tagName --jq '.[].tagName'); do
+            if [ "$tag" != "v$VERSION" ]; then
+              gh release delete "$tag" --yes
+            fi
+          done
