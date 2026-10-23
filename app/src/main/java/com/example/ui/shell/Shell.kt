@@ -95,6 +95,7 @@ fun Shell(
     onSelectJournal: (String) -> Unit,
     onCreateJournal: () -> Unit,
     onDeleteJournal: (String) -> Unit,
+    onRenameJournal: (String, String) -> Unit = { _, _ -> },
     onAddProperty: (name: String, kind: String, options: List<String>, format: String?) -> Unit,
     onDeleteProperty: (String) -> Unit,
     onUpdateProperty: (propertyId: String, name: String, kind: String, options: List<String>, format: String?) -> Unit,
@@ -511,7 +512,8 @@ fun Shell(
                         onOpenRow = onOpenRow,
                         onAddRow = onAddRow,
                         onUpdateCell = onUpdateCell,
-                        onDeleteRow = onDeleteRow
+                        onDeleteRow = onDeleteRow,
+                        onRenameJournal = onRenameJournal
                     )
                 } else if (currentPageIndex == 1) {
                     TrashPage(
