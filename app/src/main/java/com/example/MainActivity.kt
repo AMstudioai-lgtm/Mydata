@@ -119,6 +119,7 @@ class MainActivity : ComponentActivity() {
                     onSelectJournal = { id -> journalViewModel.selectJournal(id) },
                     onCreateJournal = { journalViewModel.createJournal() },
                     onDeleteJournal = { id -> journalViewModel.deleteJournal(id) },
+                    onRenameJournal = { id, name -> journalViewModel.renameJournal(id, name) },
                     onAddProperty = { name, kind, options, format ->
                         journalViewModel.addProperty(name, kind, options, format)
                     },

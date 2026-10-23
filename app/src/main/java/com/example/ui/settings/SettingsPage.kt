@@ -39,6 +39,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.BuildConfig
 import com.example.data.auth.AuthState
 import com.example.data.sync.SyncOutcome
 import com.example.data.sync.SyncStatus
@@ -329,7 +330,7 @@ fun SettingsPage(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = "Version 1.1.0 — Application de bases de données et tableaux personnalisés offline-first, avec synchronisation cloud des données pour les appareils connectés.",
+                    text = "Version ${BuildConfig.VERSION_NAME} — Application de bases de données et tableaux personnalisés offline-first, avec synchronisation cloud des données pour les appareils connectés.",
                     fontSize = 12.sp,
                     color = AppColors.TextSecondary,
                     lineHeight = 17.sp
