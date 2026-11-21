@@ -42,7 +42,9 @@ class SupabaseAuthService(
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     val isConfigured: Boolean
-        get() = BuildConfig.SUPABASE_URL.isNotBlank() && BuildConfig.SUPABASE_KEY.isNotBlank()
+        get() = BuildConfig.SUPABASE_URL.startsWith("http") &&
+            BuildConfig.SUPABASE_KEY.isNotBlank() &&
+            BuildConfig.SUPABASE_KEY != "your_supabase_key_here"
 
     private val supabaseUrl: String get() = BuildConfig.SUPABASE_URL
     private val supabaseKey: String get() = BuildConfig.SUPABASE_KEY

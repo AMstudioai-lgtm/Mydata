@@ -26,15 +26,18 @@ class AppContainer(context: Context) {
 
     val journalRepository: JournalRepository = JournalRepository(database, sessionProvider)
 
-    val backupManager: BackupManager = BackupManager(appContext, database)
-
     /**
      * Les identifiants Supabase proviennent du BuildConfig, alimenté par le plugin `secrets`
      * depuis `.env` (local, gitignoré) avec `.env.example` comme valeurs de repli.
      * Aucune clé n'est écrite dans le code source.
      */
+    private val isSupabaseConfigured: Boolean =
+        BuildConfig.SUPABASE_URL.startsWith("http") &&
+            BuildConfig.SUPABASE_KEY.isNotBlank() &&
+            BuildConfig.SUPABASE_KEY != "your_supabase_key_here"
+
     private val syncClient: SupabaseSyncClient? =
-        if (BuildConfig.SUPABASE_URL.isNotBlank() && BuildConfig.SUPABASE_KEY.isNotBlank()) {
+        if (isSupabaseConfigured) {
             SupabaseSyncClient(
                 baseUrl = BuildConfig.SUPABASE_URL,
                 apiKey = BuildConfig.SUPABASE_KEY,
@@ -53,7 +56,7 @@ class AppContainer(context: Context) {
      * et syncRepository en a besoin dès sa construction.
      */
     private val storageClient: SupabaseStorageClient? =
-        if (BuildConfig.SUPABASE_URL.isNotBlank() && BuildConfig.SUPABASE_KEY.isNotBlank()) {
+        if (isSupabaseConfigured) {
             SupabaseStorageClient(
                 baseUrl = BuildConfig.SUPABASE_URL,
                 apiKey = BuildConfig.SUPABASE_KEY,
@@ -65,6 +68,13 @@ class AppContainer(context: Context) {
         }
 
     private val imageStore: ImageStore = ImageStore(appContext, storageClient)
+
+    val backupManager: BackupManager = BackupManager(
+        context = appContext,
+        db = database,
+        sessionProvider = sessionProvider,
+        imageStore = imageStore
+    )
 
     val syncRepository: SyncRepository? = syncClient?.let { client ->
         SyncRepository(

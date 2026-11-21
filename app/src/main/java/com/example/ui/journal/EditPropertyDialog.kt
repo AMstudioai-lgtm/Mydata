@@ -39,12 +39,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import com.example.data.FORMAT_DOLLAR
-import com.example.data.FORMAT_PERCENT
-import com.example.data.FORMAT_PLAIN
 import com.example.data.db.entity.PropertyEntity
+import com.example.domain.logic.TableQueryCalculator
+import com.example.domain.model.FORMAT_DOLLAR
+import com.example.domain.model.FORMAT_PERCENT
+import com.example.domain.model.FORMAT_PLAIN
 import com.example.ui.theme.AppColors
-import org.json.JSONArray
 
 @Composable
 fun EditPropertyDialog(
@@ -53,16 +53,7 @@ fun EditPropertyDialog(
     onUpdateProperty: (propertyId: String, name: String, kind: String, options: List<String>, format: String?) -> Unit
 ) {
     val initialOptions = remember(property.optionsJson) {
-        try {
-            val arr = JSONArray(property.optionsJson)
-            val list = mutableListOf<String>()
-            for (i in 0 until arr.length()) {
-                list.add(arr.getString(i))
-            }
-            list.joinToString(", ")
-        } catch (_: Exception) {
-            ""
-        }
+        TableQueryCalculator.parseSelectOptions(property.optionsJson).joinToString(", ")
     }
 
     var name by remember { mutableStateOf(property.name) }
@@ -325,7 +316,7 @@ fun EditPropertyDialog(
                         },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = AppColors.Accent,
-                            contentColor = AppColors.TextPrimary
+                            contentColor = AppColors.OnAccent
                         ),
                         modifier = Modifier.testTag("edit_property_confirm_button")
                     ) {

@@ -1,6 +1,6 @@
 package com.example.data.sync
 
-import org.junit.Assert.assertEquals
+import com.example.domain.logic.ConflictResolver
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test

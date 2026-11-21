@@ -43,7 +43,7 @@ fun UpdateDialog(info: UpdateInfo, onDownload: () -> Unit, onDismiss: () -> Unit
                 onClick = onDownload,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = AppColors.Accent,
-                    contentColor = AppColors.TextPrimary
+                    contentColor = AppColors.OnAccent
                 )
             ) {
                 Text("Télécharger")

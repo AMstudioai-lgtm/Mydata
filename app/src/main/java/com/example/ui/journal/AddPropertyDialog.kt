@@ -39,9 +39,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import com.example.data.FORMAT_DOLLAR
-import com.example.data.FORMAT_PERCENT
-import com.example.data.FORMAT_PLAIN
+import com.example.domain.model.FORMAT_DOLLAR
+import com.example.domain.model.FORMAT_PERCENT
+import com.example.domain.model.FORMAT_PLAIN
 import com.example.ui.theme.AppColors
 
 @Composable
@@ -304,7 +304,7 @@ fun AddPropertyDialog(
                         },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = AppColors.Accent,
-                            contentColor = AppColors.TextPrimary
+                            contentColor = AppColors.OnAccent
                         ),
                         modifier = Modifier.testTag("property_confirm_button")
                     ) {

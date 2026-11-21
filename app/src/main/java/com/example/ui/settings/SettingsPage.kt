@@ -178,7 +178,7 @@ fun SettingsPage(
                             onClick = onOpenAuthDialog,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = AppColors.Accent,
-                                contentColor = AppColors.TextPrimary
+                                contentColor = AppColors.OnAccent
                             ),
                             shape = RoundedCornerShape(6.dp),
                             modifier = Modifier.testTag("settings_login_button")
@@ -250,7 +250,7 @@ fun SettingsPage(
                         onClick = { exportLauncher.launch("Mydata-backup.zip") },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = AppColors.Accent,
-                            contentColor = AppColors.TextPrimary
+                            contentColor = AppColors.OnAccent
                         ),
                         shape = RoundedCornerShape(6.dp),
                         modifier = Modifier.testTag("backup_export_button")
@@ -260,7 +260,16 @@ fun SettingsPage(
                         Text("Exporter")
                     }
                     OutlinedButton(
-                        onClick = { importLauncher.launch(arrayOf("application/zip")) },
+                        onClick = {
+                            importLauncher.launch(
+                                arrayOf(
+                                    "application/zip",
+                                    "application/x-zip-compressed",
+                                    "application/octet-stream",
+                                    "*/*"
+                                )
+                            )
+                        },
                         colors = ButtonDefaults.outlinedButtonColors(
                             contentColor = AppColors.TextPrimary
                         ),

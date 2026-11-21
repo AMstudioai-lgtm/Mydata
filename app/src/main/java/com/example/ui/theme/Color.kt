@@ -2,16 +2,28 @@ package com.example.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
+/**
+ * Palette monochrome Noir / Gris / Blanc + Accent Bleu pour les actions spéciales.
+ *
+ * 4 rôles chromatiques :
+ * 1. Primaire : Noir pur (#000000) pour le fond principal.
+ * 2. Secondaire : Blanc (#FAFAFA) et gris neutres (#A1A1AA, #6B6B73) pour la hiérarchie typographique.
+ * 3. Tertiaire : Surfaces plates en gris anthracite (#121214, #1A1A1D) et bordures fines (#26262A).
+ * 4. Quaternaire : Accent Bleu Cobalt (#2563EB) pour les points d'action clés et états système.
+ */
 object AppColors {
-    val Background = Color(0xFF1E1E1E)       // fond principal
-    val Panel = Color(0xFF252526)             // AppBar, Drawer, footer, header colonnes
-    val Accent = Color(0xFF007ACC)            // boutons, icônes actives, liens
-    val AccentLight = Color(0xFF1F8AD2)       // survol / accent éclairé
-    val Border = Color(0xFF2D2D2D)            // séparateurs et bordures de tableau
-    val SelectedBg = Color(0xFF094771)        // item sélectionné dans drawer
-    val TextPrimary = Color(0xFFFFFFFF)       // texte principal
-    val TextSecondary = Color(0xB3FFFFFF)     // texte secondaire (white70)
-    val TextMuted = Color(0x61FFFFFF)         // placeholder (white38)
-    val ErrorRed = Color(0xFFFF5252)          // erreurs auth
-    val SuccessGreen = Color(0xFF4CAF50)      // indicateurs positifs
+    val Background = Color(0xFF000000)       // Noir pur (fond principal)
+    val Panel = Color(0xFF121214)            // Gris anthracite plat (AppBar, Drawer, panneaux, en-têtes)
+    val SurfaceElevated = Color(0xFF1A1A1D)  // Gris moyen sombre (lignes alternées, champs imbriqués)
+    val Border = Color(0xFF26262A)           // Gris bordure fine (1dp, sans ombre)
+    val SelectedBg = Color(0xFF0F1D36)       // Surface active subtilement teintée de bleu
+    val Accent = Color(0xFF2563EB)           // Accent principal (Bleu cobalt) pour actions clés
+    val AccentLight = Color(0xFF60A5FA)      // Accent bleu adouci pour liens et repères secondaires
+    val OnAccent = Color(0xFFFAFAFA)         // Contraste blanc net sur l'accent bleu
+    val TextPrimary = Color(0xFFFAFAFA)      // Blanc principal
+    val TextSecondary = Color(0xFFA1A1AA)    // Gris clair lisible
+    val TextMuted = Color(0xFF6B6B73)        // Gris discret pour placeholders et vides
+    val ErrorRed = Color(0xFFEF4444)         // Erreurs et actions destructives
+    val SuccessGreen = Color(0xFF22C55E)     // Confirmations et états positifs
+    val WarningAmber = Color(0xFFF59E0B)     // Avertissements
 }

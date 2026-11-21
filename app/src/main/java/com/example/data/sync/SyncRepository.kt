@@ -9,6 +9,7 @@ import com.example.data.db.entity.PropertyEntity
 import com.example.data.images.ImageStore
 import com.example.data.images.rowImagesFromJson
 import com.example.data.images.writeImagesToValuesJson
+import com.example.domain.logic.ConflictResolver
 import java.io.IOException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow

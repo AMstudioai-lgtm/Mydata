@@ -2,6 +2,8 @@ package com.example.data.images
 
 import android.content.Context
 import android.net.Uri
+import com.example.domain.model.IMAGES_BUCKET
+import com.example.domain.model.RowImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File

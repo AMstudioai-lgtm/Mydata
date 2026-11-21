@@ -1,10 +1,7 @@
 package com.example.ui.journal
 
-import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.net.Uri
-import android.util.LruCache
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -63,163 +60,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.FileProvider
-import com.example.data.images.RowImage
+import com.example.data.images.RowImageFileStore
+import com.example.domain.model.RowImage
 import com.example.ui.theme.AppColors
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import org.json.JSONObject
 import java.io.File
-import java.io.FileOutputStream
-import java.util.UUID
 
-/** Zone de saisie libre d'une ligne, héritière de l'ancien bloc de notes. */
-const val NOTES_KEY = "__notes__"
-
-/** Clé notes utilisée avant la suppression du bloc dédié (v1.2.0). */
-const val LEGACY_NOTES_KEY = "_page_notes"
-
-/** Texte libre de la ligne. Les anciennes notes `_page_notes` sont relues tant qu'elles existent. */
-fun readNotes(valuesJson: String): String {
-    return try {
-        val obj = JSONObject(valuesJson)
-        when {
-            obj.has(NOTES_KEY) -> obj.optString(NOTES_KEY, "")
-            else -> obj.optString(LEGACY_NOTES_KEY, "")
-        }
-    } catch (_: Exception) {
-        ""
-    }
-}
-
-/**
- * Import et affichage des images d'une ligne, sans dépendance externe (pas de Coil).
- *
- * Stratégie : le sélecteur système ne donne qu'un accès temporaire à l'image, donc chaque
- * image est copiée dans le stockage interne de l'application (`filesDir/row_images`) au
- * moment du choix. Ce qui est stocké dans `valuesJson` est une URI `file://` interne :
- * elle survit à la fermeture de l'écran, au redémarrage et ne demande aucune permission
- * `READ_MEDIA_IMAGES`. Seul le sélecteur système lit le média original.
- */
-private object RowImageStore {
-
-    private const val DIRECTORY = "row_images"
-
-    /** Plus grand côté conservé à l'import, en pixels : au-delà, le fichier est rééchantillonné. */
-    private const val IMPORT_MAX_PX = 1600
-
-    /** Plus grand côté des vignettes affichées, en pixels. */
-    private const val THUMBNAIL_MAX_PX = 640
-
-    private val thumbnails = object : LruCache<String, Bitmap>(4 * 1024 * 1024) {
-        override fun sizeOf(key: String, value: Bitmap) = value.allocationByteCount
-    }
-
-    /** Copie une image choisie dans le stockage interne et renvoie son URI `file://`. */
-    suspend fun importImage(context: Context, source: Uri): String? = withContext(Dispatchers.IO) {
-        var target: File? = null
-        try {
-            val dir = File(context.filesDir, DIRECTORY).apply { mkdirs() }
-            target = File(dir, "${UUID.randomUUID()}.jpg")
-            val stream = context.contentResolver.openInputStream(source)
-            if (stream == null) {
-                return@withContext null
-            }
-            stream.use { input -> FileOutputStream(target).use { output -> input.copyTo(output) } }
-            downscale(target, IMPORT_MAX_PX)
-            Uri.fromFile(target).toString()
-        } catch (_: Exception) {
-            target?.delete()
-            null
-        }
-    }
-
-    /** Fichier prêt à recevoir une photo prise par l'appareil photo. */
-    fun newCaptureFile(context: Context): File {
-        val dir = File(context.filesDir, DIRECTORY).apply { mkdirs() }
-        return File(dir, "${UUID.randomUUID()}.jpg")
-    }
-
-    /** URI partagée à l'appareil photo via [FileProvider] (obligatoire depuis l'API 24). */
-    fun captureUri(context: Context, file: File): Uri =
-        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-
-    /** Décodage hors du thread principal, mémorisé par URI. `null` si l'image est illisible. */
-    suspend fun loadThumbnail(context: Context, uriString: String): Bitmap? {
-        thumbnails.get(uriString)?.let { return it }
-        return withContext(Dispatchers.IO) {
-            val bytes = readBytes(context, uriString) ?: return@withContext null
-            val bitmap = decodeSampled(bytes, THUMBNAIL_MAX_PX) ?: return@withContext null
-            thumbnails.put(uriString, bitmap)
-            bitmap
-        }
-    }
-
-    private fun readBytes(context: Context, uriString: String): ByteArray? {
-        return try {
-            val uri = Uri.parse(uriString)
-            when (uri.scheme) {
-                "file" -> uri.path?.let { File(it).takeIf(File::canRead)?.readBytes() }
-                else -> context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-            }
-        } catch (_: Exception) {
-            null
-        }
-    }
-
-    /**
-     * Réduit le plus grand côté à [maxPx]. Écriture atomique : le résultat part dans un
-     * fichier temporaire qui remplace l'original seulement si l'encodage a réussi, sinon
-     * une image corrompue resterait à la place de l'original.
-     */
-    private fun downscale(file: File, maxPx: Int) {
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeFile(file.path, bounds)
-        val longest = maxOf(bounds.outWidth, bounds.outHeight)
-        if (longest <= maxPx || longest <= 0) return
-
-        val options = BitmapFactory.Options().apply {
-            // Puissance de deux la plus proche par valeur inférieure : 3200 -> 800 (maxPx 1600).
-            var sample = 1
-            while (longest / (sample * 2) >= maxPx) sample *= 2
-            inSampleSize = sample
-        }
-        val bitmap = BitmapFactory.decodeFile(file.path, options) ?: return
-
-        val temp = File(file.parentFile, "${file.name}.tmp")
-        try {
-            val compressed = FileOutputStream(temp).use { out ->
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
-            }
-            if (compressed && file.delete() && temp.renameTo(file)) {
-                return
-            }
-            temp.delete()
-        } finally {
-            bitmap.recycle()
-        }
-    }
-
-    private fun decodeSampled(bytes: ByteArray, maxPx: Int): Bitmap? {
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-        val longest = maxOf(bounds.outWidth, bounds.outHeight)
-        if (longest <= 0) return null
-        val options = BitmapFactory.Options().apply {
-            var sample = 1
-            while (longest / (sample * 2) >= maxPx) sample *= 2
-            inSampleSize = sample
-        }
-        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
-    }
-}
-
-/**
- * Section images d'une ligne, enchaînement Notion : zone d'ajout discrète puis images
- * empilées verticalement, chacune en pleine largeur avec sa légende et sa croix.
- * Les nouvelles images s'ajoutent en dessous des précédentes.
- */
 @Composable
 fun RowImagesSection(
     images: List<RowImage>,
@@ -231,19 +77,17 @@ fun RowImagesSection(
     var sourceMenuExpanded by remember { mutableStateOf(false) }
     var pendingCaptureFile by remember { mutableStateOf<File?>(null) }
 
-    // Sélecteur système de photos : aucune permission de stockage n'est demandée.
     val galleryLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia(maxItems = 10)
     ) { picked ->
         if (picked.isNotEmpty()) {
             scope.launch {
-                val imported = picked.mapNotNull { uri -> RowImageStore.importImage(context, uri) }
+                val imported = picked.mapNotNull { uri -> RowImageFileStore.importImage(context, uri) }
                 if (imported.isNotEmpty()) onImagesChanged(images + imported.map { RowImage(uri = it) })
             }
         }
     }
 
-    // Appareil photo : la photo est écrite directement dans le stockage interne.
     val cameraLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.TakePicture()
     ) { success ->
@@ -263,7 +107,6 @@ fun RowImagesSection(
                 label = if (images.isEmpty()) "Ajouter une image" else "Ajouter une autre image"
             )
 
-            // Choix de la source, façon menu de commande Notion.
             DropdownMenu(
                 expanded = sourceMenuExpanded,
                 onDismissRequest = { sourceMenuExpanded = false },
@@ -304,25 +147,19 @@ fun RowImagesSection(
                     },
                     onClick = {
                         sourceMenuExpanded = false
-                        val file = RowImageStore.newCaptureFile(context)
+                        val file = RowImageFileStore.newCaptureFile(context)
                         pendingCaptureFile = file
-                        cameraLauncher.launch(RowImageStore.captureUri(context, file))
+                        cameraLauncher.launch(RowImageFileStore.captureUri(context, file))
                     }
                 )
             }
         }
 
-        // Pile verticale pleine largeur. Pas de LazyColumn : la page est déjà scrollable,
-        // et deux scrolls verticaux imbriqués sont interdits.
         images.forEachIndexed { index, image ->
             key(image.uri ?: image.remote ?: index) {
                 Spacer(modifier = Modifier.height(12.dp))
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    // Pas de cadre imposé : le conteneur épouse la hauteur réelle
-                    // de l'image, affichée en entier (Fit), sans rognage.
-                    Box(
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
+                    Box(modifier = Modifier.fillMaxWidth()) {
                         when {
                             image.uri != null -> ImageThumbnail(
                                 uri = image.uri,
@@ -332,14 +169,13 @@ fun RowImagesSection(
                             else -> UnavailablePlaceholder(modifier = Modifier.fillMaxWidth())
                         }
 
-                        // Croix de suppression, dans un badge sombre pour rester lisible
-                        // quelle que soit l'image derrière.
                         Box(
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
                                 .padding(8.dp)
-                                .size(24.dp)
-                                .background(AppColors.Background.copy(alpha = 0.8f), CircleShape)
+                                .size(26.dp)
+                                .background(AppColors.Background.copy(alpha = 0.85f), CircleShape)
+                                .border(1.dp, AppColors.Border, CircleShape)
                                 .clickable {
                                     onImagesChanged(images.filterIndexed { i, _ -> i != index })
                                 }
@@ -355,7 +191,7 @@ fun RowImagesSection(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
                     CaptionField(
                         caption = image.caption,
                         index = index,
@@ -373,12 +209,11 @@ fun RowImagesSection(
     }
 }
 
-/** Zone d'ajout : survol et clic donnent le même retour visuel, bouton discret. */
 @Composable
 private fun AddImageZone(onClick: () -> Unit, label: String, modifier: Modifier = Modifier) {
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
-    val background = if (pressed) AppColors.SelectedBg.copy(alpha = 0.45f) else AppColors.Panel
+    val background = if (pressed) AppColors.SelectedBg else AppColors.Panel
 
     Surface(
         color = background,
@@ -386,7 +221,7 @@ private fun AddImageZone(onClick: () -> Unit, label: String, modifier: Modifier 
         border = BorderStroke(1.dp, AppColors.Border),
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 56.dp)
+            .heightIn(min = 52.dp)
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
             .testTag("row_images_add_zone")
     ) {
@@ -400,7 +235,7 @@ private fun AddImageZone(onClick: () -> Unit, label: String, modifier: Modifier 
             Icon(
                 imageVector = Icons.Default.AddPhotoAlternate,
                 contentDescription = null,
-                tint = AppColors.AccentLight,
+                tint = AppColors.Accent,
                 modifier = Modifier.size(20.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
@@ -414,12 +249,6 @@ private fun AddImageZone(onClick: () -> Unit, label: String, modifier: Modifier 
     }
 }
 
-/**
- * Champ de légende sous une image. Buffer local comme le titre : la légende est réécrite
- * en base à chaque frappe, donc la value reviendrait à la fin et le curseur sauterait
- * sans ce buffer. Resynchronisé depuis le store quand le champ n'a pas le focus
- * (suppression, réouverture, sync).
- */
 @Composable
 private fun CaptionField(
     caption: String,
@@ -465,12 +294,11 @@ private fun CaptionField(
     )
 }
 
-/** Image locale affichée en entier, sans cadre ni rognage. Placeholder si illisible. */
 @Composable
 private fun ImageThumbnail(uri: String, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val bitmap by produceState<Bitmap?>(initialValue = null, uri) {
-        value = RowImageStore.loadThumbnail(context, uri)
+        value = RowImageFileStore.loadThumbnail(context, uri)
     }
 
     val loaded = bitmap
@@ -486,18 +314,17 @@ private fun ImageThumbnail(uri: String, modifier: Modifier = Modifier) {
     }
 }
 
-/** Image téléversée dont le fichier local est absent : le téléchargement viendra d'un autre chantier. */
 @Composable
 private fun CloudPlaceholder(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
-            .background(AppColors.Background, RoundedCornerShape(8.dp))
+            .background(AppColors.Panel, RoundedCornerShape(8.dp))
             .border(1.dp, AppColors.Border, RoundedCornerShape(8.dp)),
         contentAlignment = Alignment.Center
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(8.dp)
+            modifier = Modifier.padding(16.dp)
         ) {
             Icon(
                 imageVector = Icons.Default.CloudOff,
@@ -515,18 +342,17 @@ private fun CloudPlaceholder(modifier: Modifier = Modifier) {
     }
 }
 
-/** Image locale devenue inaccessible : pas de plantage, un simple emplacement discret. */
 @Composable
 private fun UnavailablePlaceholder(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
-            .background(AppColors.Background, RoundedCornerShape(8.dp))
+            .background(AppColors.Panel, RoundedCornerShape(8.dp))
             .border(1.dp, AppColors.Border, RoundedCornerShape(8.dp)),
         contentAlignment = Alignment.Center
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(8.dp)
+            modifier = Modifier.padding(16.dp)
         ) {
             Icon(
                 imageVector = Icons.Default.BrokenImage,

@@ -1,55 +1,12 @@
-package com.example.data.backup
+package com.example.domain.logic
 
-// Version du format data.json. Toute archive d'une autre version est refusée
-// à l'import avec un message explicite (cf. BackupCodec.decode).
-const val BACKUP_VERSION = 1
+import com.example.domain.model.BACKUP_VERSION
+import com.example.domain.model.BackupFormatException
+import com.example.domain.model.BackupJournal
+import com.example.domain.model.BackupPayload
+import com.example.domain.model.BackupProperty
+import com.example.domain.model.BackupRow
 
-// Miroirs purs des entités Room (aucune dépendance Android/Room) pour que
-// la sérialisation reste testable en JUnit pur sur la JVM.
-data class BackupJournal(
-    val id: String,
-    val name: String,
-    val createdAt: Long,
-    val updatedAt: Long,
-    val deletedAt: Long?,
-    val userId: String?
-)
-
-data class BackupProperty(
-    val id: String,
-    val journalId: String,
-    val name: String,
-    val kind: String,
-    val format: String?,
-    val optionsJson: String,
-    val sortOrder: Int,
-    val updatedAt: Long,
-    val deletedAt: Long?,
-    val userId: String?
-)
-
-data class BackupRow(
-    val id: String,
-    val journalId: String,
-    val valuesJson: String,
-    val createdAt: Long,
-    val updatedAt: Long,
-    val deletedAt: Long?,
-    val userId: String?
-)
-
-data class BackupPayload(
-    val version: Int = BACKUP_VERSION,
-    val journals: List<BackupJournal> = emptyList(),
-    val properties: List<BackupProperty> = emptyList(),
-    val rows: List<BackupRow> = emptyList()
-)
-
-// Échec de lecture : le message est déjà en français pour remonter tel quel.
-class BackupFormatException(message: String) : IllegalArgumentException(message)
-
-// Codec JSON autonome (aucune librairie) : org.json est un stub Android inutilisable
-// en test JVM, et aucune autre dépendance JSON n'est garantie côté unit-test.
 object BackupCodec {
 
     fun encode(payload: BackupPayload): String = buildString {
@@ -195,8 +152,6 @@ object BackupCodec {
     }
 }
 
-// --- Modèle JSON minimal -----------------------------------------------------
-
 private sealed interface JsonVal
 private data class JsonObj(val map: Map<String, JsonVal>) : JsonVal
 private data class JsonArr(val items: List<JsonVal>) : JsonVal
@@ -236,7 +191,6 @@ private fun JsonObj.arr(key: String): List<JsonVal> {
     return v.items
 }
 
-// Descente récursive stricte : tout caractère inattendu lève BackupFormatException.
 private class JsonParser(private val src: String) {
     private var pos = 0
 
@@ -260,7 +214,6 @@ private class JsonParser(private val src: String) {
         }
     }
 
-    // Le schéma n'émet que null/objets/tableaux/chaînes/entiers : booléens refusés.
     private fun lit(word: String): JsonVal {
         if (!src.startsWith(word, pos)) throw BackupFormatException("Sauvegarde illisible : mot-clé invalide à la position $pos.")
         pos += word.length
@@ -268,7 +221,7 @@ private class JsonParser(private val src: String) {
     }
 
     private fun obj(): JsonObj {
-        pos++ // {
+        pos++
         val m = LinkedHashMap<String, JsonVal>()
         blank()
         if (pos < src.length && src[pos] == '}') {
@@ -301,7 +254,7 @@ private class JsonParser(private val src: String) {
     }
 
     private fun arr(): JsonArr {
-        pos++ // [
+        pos++
         val items = ArrayList<JsonVal>()
         blank()
         if (pos < src.length && src[pos] == ']') {
@@ -324,7 +277,7 @@ private class JsonParser(private val src: String) {
     }
 
     private fun str(): String {
-        pos++ // "
+        pos++
         val sb = StringBuilder()
         while (true) {
             if (pos >= src.length) throw BackupFormatException("Sauvegarde illisible : chaîne non fermée.")
@@ -366,7 +319,6 @@ private class JsonParser(private val src: String) {
             throw BackupFormatException("Sauvegarde illisible : nombre invalide à la position $start.")
         }
         while (pos < src.length && src[pos] in '0'..'9') pos++
-        // Le schéma n'émet que des entiers : décimales et exposants refusés.
         if (pos < src.length && (src[pos] == '.' || src[pos] == 'e' || src[pos] == 'E')) {
             throw BackupFormatException("Sauvegarde illisible : nombre décimal inattendu.")
         }

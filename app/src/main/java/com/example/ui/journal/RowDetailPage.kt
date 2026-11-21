@@ -22,12 +22,12 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
+import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.FormatListBulleted
-import androidx.compose.material.icons.filled.Notes
 import androidx.compose.material.icons.filled.Numbers
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -57,11 +57,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.db.entity.EntryRowEntity
 import com.example.data.db.entity.PropertyEntity
-import com.example.data.images.IMAGES_KEY
 import com.example.data.images.rowImagesFromJson
 import com.example.data.images.rowImagesToJson
+import com.example.domain.logic.TableQueryCalculator
+import com.example.domain.model.IMAGES_KEY
+import com.example.domain.model.LEGACY_NOTES_KEY
+import com.example.domain.model.NOTES_KEY
 import com.example.ui.theme.AppColors
-import org.json.JSONObject
+import com.example.ui.theme.JetBrainsMonoFamily
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -81,20 +84,16 @@ fun RowDetailPage(
     val scrollState = rememberScrollState()
 
     val rowValues = remember(row.valuesJson) {
-        try {
-            JSONObject(row.valuesJson)
-        } catch (_: Exception) {
-            JSONObject()
-        }
+        TableQueryCalculator.parseCellMap(row.valuesJson)
     }
 
     val primaryProperty = properties.firstOrNull()
-    val primaryValue = if (primaryProperty != null && rowValues.has(primaryProperty.id)) {
-        rowValues.optString(primaryProperty.id, "")
+    val primaryValue = if (primaryProperty != null) {
+        rowValues[primaryProperty.id].orEmpty()
     } else ""
 
     val rowImages = remember(row.valuesJson) { rowImagesFromJson(row.valuesJson) }
-    val notesValue = remember(row.valuesJson) { readNotes(row.valuesJson) }
+    val notesValue = remember(row.valuesJson) { TableQueryCalculator.readNotes(row.valuesJson) }
 
     // Titre : buffer local comme dans les cellules du tableau. Le champ est réécrit en base
     // à chaque frappe (le tableau doit suivre en direct), donc la value reviendrait à
@@ -110,7 +109,7 @@ fun RowDetailPage(
     // Migration de l'ancien bloc de notes : dès que la zone libre est modifiée, la note
     // héritée est recopiée sous la clé réservée et l'ancienne clé est retirée.
     var legacyNotesCleared by remember(row.valuesJson) {
-        mutableStateOf(!rowValues.has(LEGACY_NOTES_KEY))
+        mutableStateOf(!rowValues.containsKey(LEGACY_NOTES_KEY))
     }
 
     var notesBuffer by remember {
@@ -147,20 +146,12 @@ fun RowDetailPage(
                 },
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = AppColors.SelectedBg,
-                            modifier = Modifier.size(20.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.Description,
-                                    contentDescription = null,
-                                    tint = AppColors.AccentLight,
-                                    modifier = Modifier.size(13.dp)
-                                )
-                            }
-                        }
+                        Icon(
+                            imageVector = Icons.Default.Description,
+                            contentDescription = null,
+                            tint = AppColors.Accent,
+                            modifier = Modifier.size(16.dp)
+                        )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = if (primaryValue.isNotBlank()) primaryValue else "Élément sans titre",
@@ -238,6 +229,7 @@ fun RowDetailPage(
             Text(
                 text = "Créé le $formattedCreatedDate",
                 fontSize = 11.sp,
+                fontFamily = JetBrainsMonoFamily,
                 color = AppColors.TextMuted
             )
 
@@ -263,15 +255,13 @@ fun RowDetailPage(
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     properties.forEachIndexed { index, prop ->
-                        val currentValue = if (rowValues.has(prop.id)) {
-                            rowValues.optString(prop.id, "")
-                        } else ""
+                        val currentValue = rowValues[prop.id].orEmpty()
 
                         val icon = when (prop.kind) {
                             "text" -> Icons.Default.TextFields
                             "number" -> Icons.Default.Numbers
                             "date" -> Icons.Default.CalendarToday
-                            "select" -> Icons.Default.FormatListBulleted
+                            "select" -> Icons.AutoMirrored.Filled.FormatListBulleted
                             else -> Icons.Default.Description
                         }
 
@@ -378,6 +368,7 @@ fun RowDetailPage(
                         "${rowImages.size}" + (if (rowImages.size > 1) " images" else " image")
                     },
                     fontSize = 11.sp,
+                    fontFamily = JetBrainsMonoFamily,
                     color = AppColors.TextMuted
                 )
             }
@@ -399,7 +390,7 @@ fun RowDetailPage(
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    imageVector = Icons.Default.Notes,
+                    imageVector = Icons.AutoMirrored.Filled.Notes,
                     contentDescription = null,
                     tint = AppColors.AccentLight,
                     modifier = Modifier.size(16.dp)

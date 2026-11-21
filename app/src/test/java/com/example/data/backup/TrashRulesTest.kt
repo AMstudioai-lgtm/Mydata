@@ -1,5 +1,9 @@
 package com.example.data.backup
 
+import com.example.domain.logic.BackupCodec
+import com.example.domain.logic.TrashRules
+import com.example.domain.model.BackupJournal
+import com.example.domain.model.BackupPayload
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

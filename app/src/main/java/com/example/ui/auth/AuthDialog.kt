@@ -217,14 +217,14 @@ fun AuthDialog(
                         enabled = !isSubmitting && email.isNotBlank() && password.isNotBlank(),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = AppColors.Accent,
-                            contentColor = AppColors.TextPrimary
+                            contentColor = AppColors.OnAccent
                         ),
                         shape = RoundedCornerShape(6.dp),
                         modifier = Modifier.fillMaxWidth().height(46.dp).testTag("auth_submit_button")
                     ) {
                         if (isSubmitting) {
                             CircularProgressIndicator(
-                                color = AppColors.TextPrimary,
+                                color = AppColors.OnAccent,
                                 modifier = Modifier.size(20.dp),
                                 strokeWidth = 2.dp
                             )

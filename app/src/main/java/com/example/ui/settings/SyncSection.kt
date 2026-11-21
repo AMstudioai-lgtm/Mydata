@@ -106,7 +106,7 @@ fun SyncSection(
                 enabled = !syncStatus.isSyncing,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = AppColors.Accent,
-                    contentColor = AppColors.TextPrimary
+                    contentColor = AppColors.OnAccent
                 ),
                 shape = RoundedCornerShape(6.dp),
                 modifier = Modifier.testTag("sync_button")
@@ -115,7 +115,7 @@ fun SyncSection(
                     CircularProgressIndicator(
                         modifier = Modifier.size(14.dp),
                         strokeWidth = 2.dp,
-                        color = AppColors.TextPrimary
+                        color = AppColors.OnAccent
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(syncStatus.phase.ifBlank { "Synchronisation…" })

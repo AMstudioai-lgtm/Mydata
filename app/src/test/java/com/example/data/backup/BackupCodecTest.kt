@@ -1,5 +1,11 @@
 package com.example.data.backup
 
+import com.example.domain.logic.BackupCodec
+import com.example.domain.model.BackupFormatException
+import com.example.domain.model.BackupJournal
+import com.example.domain.model.BackupPayload
+import com.example.domain.model.BackupProperty
+import com.example.domain.model.BackupRow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows

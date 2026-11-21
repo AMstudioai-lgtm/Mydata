@@ -4,8 +4,8 @@ import com.example.data.db.AppDatabase
 import com.example.data.db.entity.EntryRowEntity
 import com.example.data.db.entity.JournalEntity
 import com.example.data.db.entity.PropertyEntity
-import com.example.data.resolvePropertyFormat
 import com.example.data.session.SessionProvider
+import com.example.domain.logic.resolvePropertyFormat
 import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
 import org.json.JSONArray

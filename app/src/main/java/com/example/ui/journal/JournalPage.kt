@@ -16,10 +16,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.LibraryBooks
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.LibraryBooks
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ViewColumn
 import androidx.compose.material3.AlertDialog
@@ -48,7 +48,10 @@ import androidx.compose.ui.unit.sp
 import com.example.data.db.entity.EntryRowEntity
 import com.example.data.db.entity.JournalEntity
 import com.example.data.db.entity.PropertyEntity
+import com.example.data.db.toDomain
+import com.example.domain.logic.TableQueryCalculator
 import com.example.ui.theme.AppColors
+import com.example.ui.theme.JetBrainsMonoFamily
 
 @Composable
 fun JournalPage(
@@ -88,7 +91,15 @@ fun JournalPage(
     var localSortAsc by remember(sortAscending) { mutableStateOf(sortAscending) }
     val effectiveQuery = localQuery
     val visibleRows = remember(rows, properties, effectiveQuery, localSortId, localSortAsc) {
-        visibleTableRows(rows, properties, effectiveQuery, localSortId, localSortAsc)
+        val visibleDomain = TableQueryCalculator.visibleRows(
+            rows = rows.map { it.toDomain() },
+            properties = properties.map { it.toDomain() },
+            query = effectiveQuery,
+            sortPropertyId = localSortId,
+            sortAscending = localSortAsc
+        )
+        val byId = rows.associateBy { it.id }
+        visibleDomain.mapNotNull { byId[it.id] }
     }
 
     if (!hasAnyJournals || selectedJournal == null) {
@@ -104,17 +115,17 @@ fun JournalPage(
                 verticalArrangement = Arrangement.Center
             ) {
                 Surface(
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RoundedCornerShape(14.dp),
                     color = AppColors.Panel,
                     border = BorderStroke(1.dp, AppColors.Border),
-                    modifier = Modifier.size(72.dp)
+                    modifier = Modifier.size(68.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
-                            imageVector = Icons.Default.LibraryBooks,
+                            imageVector = Icons.AutoMirrored.Filled.LibraryBooks,
                             contentDescription = null,
                             tint = AppColors.Accent,
-                            modifier = Modifier.size(36.dp)
+                            modifier = Modifier.size(32.dp)
                         )
                     }
                 }
@@ -144,7 +155,7 @@ fun JournalPage(
                     onClick = onCreateJournal,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = AppColors.Accent,
-                        contentColor = AppColors.TextPrimary
+                        contentColor = AppColors.OnAccent
                     ),
                     shape = RoundedCornerShape(8.dp),
                     modifier = Modifier.testTag("create_database_button")
@@ -183,20 +194,12 @@ fun JournalPage(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = AppColors.SelectedBg,
-                            modifier = Modifier.size(24.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(
-                                    text = "DB",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = AppColors.TextPrimary
-                                )
-                            }
-                        }
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.LibraryBooks,
+                            contentDescription = null,
+                            tint = AppColors.Accent,
+                            modifier = Modifier.size(18.dp)
+                        )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
                             text = selectedJournal.name,
@@ -217,8 +220,9 @@ fun JournalPage(
                         }
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "(${visibleRows.size} lignes)",
+                            text = "${visibleRows.size}",
                             fontSize = 12.sp,
+                            fontFamily = JetBrainsMonoFamily,
                             color = AppColors.TextMuted
                         )
                     }
@@ -319,7 +323,7 @@ fun JournalPage(
                                 onClick = { showAddPropertyDialog = true },
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = AppColors.Accent,
-                                    contentColor = AppColors.TextPrimary
+                                    contentColor = AppColors.OnAccent
                                 ),
                                 shape = RoundedCornerShape(6.dp),
                                 modifier = Modifier.testTag("add_first_property_button")
@@ -406,7 +410,7 @@ fun JournalPage(
                         enabled = properties.isNotEmpty(),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = AppColors.Accent,
-                            contentColor = AppColors.TextPrimary,
+                            contentColor = AppColors.OnAccent,
                             disabledContainerColor = AppColors.Panel,
                             disabledContentColor = AppColors.TextMuted
                         ),
@@ -541,7 +545,7 @@ fun JournalPage(
                     enabled = renameText.isNotBlank(),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = AppColors.Accent,
-                        contentColor = AppColors.TextPrimary,
+                        contentColor = AppColors.OnAccent,
                         disabledContainerColor = AppColors.Panel,
                         disabledContentColor = AppColors.TextMuted
                     ),

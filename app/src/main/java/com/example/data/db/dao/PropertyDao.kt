@@ -1,10 +1,8 @@
 package com.example.data.db.dao
 
 import androidx.room.Dao
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
 import androidx.room.Query
-import androidx.room.Update
+import androidx.room.Upsert
 import com.example.data.db.entity.PropertyEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -23,7 +21,7 @@ interface PropertyDao {
     @Query("UPDATE properties SET user_id = :userId WHERE user_id IS NULL AND deleted_at IS NULL")
     suspend fun adoptOrphans(userId: String): Int
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Upsert
     suspend fun upsert(property: PropertyEntity)
 
     @Query("SELECT * FROM properties WHERE id = :id")

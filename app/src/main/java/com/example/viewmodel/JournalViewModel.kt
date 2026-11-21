@@ -7,9 +7,10 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.db.entity.EntryRowEntity
 import com.example.data.db.entity.JournalEntity
 import com.example.data.db.entity.PropertyEntity
-import com.example.data.backup.BackupInfo
 import com.example.data.backup.BackupManager
 import com.example.data.repository.JournalRepository
+import com.example.domain.model.BackupInfo
+import com.example.domain.model.TableSort
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,12 +22,6 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-
-/** Tri du tableau : colonne ciblée + sens. `ascending == null` = ordre de création. */
-data class TableSort(
-    val propertyId: String? = null,
-    val ascending: Boolean? = null
-)
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class JournalViewModel(
@@ -247,10 +242,14 @@ class JournalViewModel(
                 return@launch
             }
             val result = manager.importBackup(uri)
-            _backupFeedback.value = if (result.isSuccess) {
-                "Sauvegarde restaurée : ${backupSummary(result.getOrThrow())}."
+            if (result.isSuccess) {
+                val info = result.getOrThrow()
+                info.firstActiveJournalId?.let { restoredId ->
+                    _selectedJournalId.value = restoredId
+                }
+                _backupFeedback.value = "Sauvegarde restaurée : ${backupSummary(info)}."
             } else {
-                "Échec de la restauration : ${result.exceptionOrNull()?.message ?: "erreur inconnue"}."
+                _backupFeedback.value = "Échec de la restauration : ${result.exceptionOrNull()?.message ?: "erreur inconnue"}."
             }
         }
     }

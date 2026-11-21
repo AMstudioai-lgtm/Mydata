@@ -44,11 +44,12 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.FORMAT_DOLLAR
-import com.example.data.FORMAT_PERCENT
-import com.example.data.parseNumberInput
+import com.example.domain.logic.TableQueryCalculator
+import com.example.domain.logic.parseNumberInput
+import com.example.domain.model.FORMAT_DOLLAR
+import com.example.domain.model.FORMAT_PERCENT
 import com.example.ui.theme.AppColors
-import org.json.JSONArray
+import com.example.ui.theme.JetBrainsMonoFamily
 import java.util.Calendar
 import java.util.Locale
 
@@ -152,6 +153,7 @@ fun NumberCell(
                 Text(
                     text = "$",
                     color = AppColors.TextSecondary,
+                    fontFamily = JetBrainsMonoFamily,
                     fontSize = 13.sp
                 )
                 Spacer(modifier = Modifier.width(2.dp))
@@ -165,6 +167,7 @@ fun NumberCell(
                 singleLine = true,
                 textStyle = TextStyle(
                     color = AppColors.TextPrimary,
+                    fontFamily = JetBrainsMonoFamily,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium
                 ),
@@ -205,6 +208,7 @@ fun NumberCell(
                 Text(
                     text = "%",
                     color = AppColors.TextSecondary,
+                    fontFamily = JetBrainsMonoFamily,
                     fontSize = 13.sp
                 )
             }
@@ -272,6 +276,7 @@ fun DateCell(
             Text(
                 text = value.ifEmpty { "Choisir" },
                 color = if (value.isNotEmpty()) AppColors.TextPrimary else AppColors.TextMuted,
+                fontFamily = JetBrainsMonoFamily,
                 fontSize = 12.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -290,16 +295,7 @@ fun SelectCell(
     var expanded by remember { mutableStateOf(false) }
 
     val options = remember(optionsJson) {
-        try {
-            val array = JSONArray(optionsJson)
-            val list = mutableListOf<String>()
-            for (i in 0 until array.length()) {
-                list.add(array.getString(i))
-            }
-            list
-        } catch (_: Exception) {
-            emptyList()
-        }
+        TableQueryCalculator.parseSelectOptions(optionsJson)
     }
 
     Box(
@@ -315,37 +311,25 @@ fun SelectCell(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Optional colored badge for Long / Short / Gain / Perte style options
             val isPositive = value.equals("Gain", ignoreCase = true) || value.equals("Long", ignoreCase = true)
             val isNegative = value.equals("Perte", ignoreCase = true) || value.equals("Short", ignoreCase = true)
 
-            val badgeBg = when {
-                isPositive -> AppColors.SuccessGreen.copy(alpha = 0.2f)
-                isNegative -> AppColors.ErrorRed.copy(alpha = 0.2f)
-                value.isNotEmpty() -> AppColors.SelectedBg
-                else -> androidx.compose.ui.graphics.Color.Transparent
-            }
-            val badgeText = when {
+            val valueColor = when {
                 isPositive -> AppColors.SuccessGreen
                 isNegative -> AppColors.ErrorRed
                 value.isNotEmpty() -> AppColors.TextPrimary
                 else -> AppColors.TextMuted
             }
 
-            Box(
-                modifier = Modifier
-                    .background(badgeBg, RoundedCornerShape(4.dp))
-                    .padding(horizontal = if (value.isNotEmpty()) 6.dp else 0.dp, vertical = 2.dp)
-            ) {
-                Text(
-                    text = value.ifEmpty { "Choisir…" },
-                    color = badgeText,
-                    fontSize = 12.sp,
-                    fontWeight = if (value.isNotEmpty()) FontWeight.Medium else FontWeight.Normal,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+            Text(
+                text = value.ifEmpty { "Choisir…" },
+                color = valueColor,
+                fontSize = 12.sp,
+                fontWeight = if (value.isNotEmpty()) FontWeight.Medium else FontWeight.Normal,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
 
             Icon(
                 imageVector = Icons.Default.ArrowDropDown,

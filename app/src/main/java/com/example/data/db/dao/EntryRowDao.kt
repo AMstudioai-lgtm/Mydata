@@ -1,9 +1,8 @@
 package com.example.data.db.dao
 
 import androidx.room.Dao
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Upsert
 import com.example.data.db.entity.EntryRowEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -16,7 +15,7 @@ interface EntryRowDao {
     @Query("SELECT * FROM entry_rows WHERE journal_id = :journalId AND (user_id IS :userId OR user_id IS NULL) AND deleted_at IS NULL ORDER BY created_at ASC")
     fun watchByJournalForUser(journalId: String, userId: String?): Flow<List<EntryRowEntity>>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Upsert
     suspend fun upsert(row: EntryRowEntity)
 
     @Query("UPDATE entry_rows SET user_id = :userId WHERE user_id IS NULL AND deleted_at IS NULL")

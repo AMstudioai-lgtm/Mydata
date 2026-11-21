@@ -41,8 +41,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.db.entity.EntryRowEntity
 import com.example.data.db.entity.JournalEntity
+import com.example.domain.logic.TableQueryCalculator
 import com.example.ui.theme.AppColors
-import org.json.JSONObject
 
 @Composable fun TrashPage(
   trashedJournals: List<JournalEntity>,
@@ -153,7 +153,7 @@ import org.json.JSONObject
                             onClick = { onRestoreJournal(journal.id) },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = AppColors.Accent,
-                                contentColor = AppColors.TextPrimary
+                                contentColor = AppColors.OnAccent
                             ),
                             shape = RoundedCornerShape(6.dp),
                             modifier = Modifier.testTag("restore_journal_button_$index")
@@ -224,7 +224,7 @@ import org.json.JSONObject
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = rowPreview(row.valuesJson),
+                            text = TableQueryCalculator.rowPreview(row.valuesJson),
                             fontSize = 13.sp,
                             color = AppColors.TextSecondary,
                             maxLines = 2,
@@ -236,7 +236,7 @@ import org.json.JSONObject
                                 onClick = { onRestoreRow(row.id) },
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = AppColors.Accent,
-                                    contentColor = AppColors.TextPrimary
+                                    contentColor = AppColors.OnAccent
                                 ),
                                 shape = RoundedCornerShape(6.dp),
                                 modifier = Modifier.testTag("restore_row_button_$index")
@@ -354,19 +354,5 @@ import org.json.JSONObject
                 }
             }
         )
-    }
-}
-
-private fun rowPreview(valuesJson: String): String {
-    return try {
-        val obj = JSONObject(valuesJson)
-        obj.keys().asSequence()
-            .map { obj.optString(it, "") }
-            .filter { it.isNotBlank() }
-            .joinToString(" • ")
-            .take(120)
-            .ifBlank { "Ligne sans contenu" }
-    } catch (_: Exception) {
-        "Ligne sans contenu"
     }
 }
