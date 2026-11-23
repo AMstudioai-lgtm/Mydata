@@ -3,7 +3,6 @@ package com.example.ui.auth
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,11 +32,12 @@ fun AuthButton(
 ) {
     val (label, icon) = when (authState) {
         is AuthState.LoggedIn -> {
-            val email = authState.session.email
-            val display = if (email.length > 18) email.take(15) + "…" else email
+            val raw = authState.session.displayName?.takeIf { it.isNotBlank() }
+                ?: authState.session.email
+            val display = if (raw.length > 18) raw.take(15) + "…" else raw
             display to Icons.Default.AccountCircle
         }
-        else -> "Connexion" to Icons.AutoMirrored.Filled.Login
+        else -> "Google" to Icons.AutoMirrored.Filled.Login
     }
 
     OutlinedButton(

@@ -1,13 +1,13 @@
 package com.example.data.session
 
-import com.example.data.auth.SupabaseAuthService
+import com.example.data.auth.FirebaseAuthService
 
 /**
- * Branche le service d'authentification sur les producteurs de données.
+ * Branche FirebaseAuthService sur les producteurs de données Room.
  * Garde la dépendance dans un seul sens : les repositories connaissent la session,
  * jamais l'inverse.
  */
-fun SupabaseAuthService.asSessionProvider(): SessionProvider = object : SessionProvider {
+fun FirebaseAuthService.asSessionProvider(): SessionProvider = object : SessionProvider {
     override fun currentUserId(): String? = this@asSessionProvider.currentUserId()
     override fun currentEmail(): String? = this@asSessionProvider.currentEmail()
 }

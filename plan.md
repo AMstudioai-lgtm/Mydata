@@ -1,21 +1,18 @@
 # Plan Opérationnel — Mydata
 
 ## 1. Architecture & Modularité
-- [x] Créer la couche `domain/model` et `domain/logic` sans dépendance Android/Room/Compose.
-- [x] Extraire les calculs de tableau (`TableQueryCalculator`), le formatage numérique (`PropertyFormatRules`), la gestion de corbeille (`TrashRules`), le codec ZIP JSON (`BackupCodec`) et la résolution de conflits (`ConflictResolver`).
-- [x] Extraire la gestion physique des images (`RowImageFileStore`, `RowImageJsonCodec`) hors des composables UI.
-- [x] Découper les composants UI lourds (`ShellDrawer`, `TableComponents`).
-- **Critère de validation** : aucun calcul métier ou accès `java.io.File`/`BitmapFactory` dans `ui/`, compilation propre.
+- [x] Séparation stricte en couches (`domain/model`, `domain/logic`, `data/`, `viewmodel/`, `ui/`, `di/`).
+- [x] Extraction des calculateurs métier purs et gestion physique des fichiers photo hors de l'UI.
 
-## 2. Design System (Noir / Gris / Blanc + Accent)
-- [x] Redéfinir `Color.kt`, `Type.kt`, `Theme.kt` et la barre système (`MainActivity.kt`) en thème sombre noir pur + gris plats + blanc + accent Bleu Cobalt (`#2563EB`).
-- [x] Installer les polices locales `plus_jakarta_sans.ttf` et `jetbrains_mono.ttf`.
-- [x] Supprimer les pilules superflues (`DB`, badges neutres) et appliquer le contraste `OnAccent` sur tous les boutons accentués.
-- **Critère de validation** : contraste net, hiérarchie typographique claire, transitions douces dans `Shell.kt`.
+## 2. Design System (Noir / Gris / Blanc + Accent Bleu Cobalt)
+- [x] Thème sombre noir pur + gris plats + blanc + accent Bleu Cobalt (`#2563EB`) et polices locales `PlusJakartaSans` / `JetBrainsMono`.
 
 ## 3. Correctif Export / Réimport ZIP (Tables & Photos)
-- [x] Remplacer `@Insert(onConflict = REPLACE)` par `@Upsert` dans `JournalDao`, `PropertyDao`, `EntryRowDao`.
-- [x] Corriger `BackupManager` (lecture multi-sources des photos à l'export, normalisation des chemins ZIP, réattribution à `activeUserId`, rafraîchissement de `updatedAt`).
-- [x] Élargir les types MIME dans `SettingsPage` et auto-sélectionner la table restaurée dans `JournalViewModel`.
-- [x] Ajouter `BackupManagerTest` (Robolectric) et `TableQueryCalculatorTest` (JUnit).
-- **Critère de validation** : `compile_applet` et `gradle :app:testDebugUnitTest` passent intégralement.
+- [x] Fusion `@Upsert`, réattribution à la session active, restauration complète des images locales et tests Robolectric.
+
+## 4. Migration Supabase -> Firebase Firestore & Google Sign-In
+- [x] Provisionner Firebase (`ai-project-manager-503720`, base Firestore nommée, SHA-1/SHA-256 vérifiés dans `app/google-services.json`).
+- [x] Définir `firebase-blueprint.json`, durcir `firestore.rules`, configurer `firebase.json` (base unique) et valider par `firestore.test.js` sur émulateur local (port `8085`).
+- [x] Implémenter Google Sign-In via Jetpack Credential Manager (`GetSignInWithGoogleOption` + `GetGoogleIdOption`), `FirebaseAuthService`, `AuthScreen`, `AuthDialog` et gating `key(uid)` dans `MainActivity.kt`.
+- [x] Migrer la synchronisation LWW vers `FirestoreSyncClient` / `FirestoreSyncModels` / `SyncRepository` et supprimer les fichiers Supabase obsolètes.
+- [x] Vérifier compilation, tests unitaires/Robolectric (`FirestoreSyncMapperTest`, etc.) et déployer les règles Firestore (`DeployRules`).

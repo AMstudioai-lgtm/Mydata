@@ -3,8 +3,8 @@ package com.example.data.auth
 data class AuthSession(
     val userId: String,
     val email: String,
-    val accessToken: String? = null,
-    val isOfflineMode: Boolean = false
+    val displayName: String? = null,
+    val photoUrl: String? = null
 )
 
 sealed interface AuthState {

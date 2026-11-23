@@ -116,8 +116,17 @@ fun SettingsPage(
 
                 when (authState) {
                     is AuthState.LoggedIn -> {
+                        if (!authState.session.displayName.isNullOrBlank()) {
+                            Text(
+                                text = authState.session.displayName,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = AppColors.TextPrimary
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                        }
                         Text(
-                            text = "Email connecté :",
+                            text = "Compte Google connecté :",
                             fontSize = 12.sp,
                             color = AppColors.TextSecondary
                         )
@@ -138,7 +147,7 @@ fun SettingsPage(
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "Session Supabase active — synchronisation disponible",
+                                text = "Session Firebase active — synchronisation Firestore disponible",
                                 fontSize = 11.sp,
                                 color = AppColors.SuccessGreen
                             )
@@ -160,14 +169,14 @@ fun SettingsPage(
                     }
                     else -> {
                         Text(
-                            text = "Mode local (sans compte)",
+                            text = "Non connecté",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium,
                             color = AppColors.TextPrimary
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Vous utilisez l'application en mode 100% hors-ligne. Connectez-vous pour authentifier votre session et activer la synchronisation entre appareils.",
+                            text = "Connectez-vous avec Google pour synchroniser vos tables sur Firebase Firestore.",
                             fontSize = 12.sp,
                             color = AppColors.TextSecondary
                         )
@@ -185,7 +194,7 @@ fun SettingsPage(
                         ) {
                             Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Connexion / Créer un compte")
+                            Text("Continuer avec Google")
                         }
                     }
                 }

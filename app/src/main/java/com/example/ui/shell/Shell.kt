@@ -84,8 +84,7 @@ fun Shell(
     onAddRow: () -> Unit,
     onUpdateCell: (rowId: String, propId: String, value: Any?) -> Unit,
     onDeleteRow: (rowId: String) -> Unit,
-    onSignIn: (String, String) -> Unit,
-    onSignUp: (String, String) -> Unit,
+    onGoogleSignIn: () -> Unit,
     onSignOut: () -> Unit,
     syncStatus: SyncStatus,
     syncOutcome: SyncOutcome?,
@@ -285,8 +284,7 @@ fun Shell(
             authState = authState,
             isSubmitting = isAuthSubmitting,
             errorMessage = authErrorMessage,
-            onSignIn = onSignIn,
-            onSignUp = onSignUp,
+            onGoogleSignIn = onGoogleSignIn,
             onSignOut = onSignOut,
             onDismiss = { showAuthDialog = false }
         )

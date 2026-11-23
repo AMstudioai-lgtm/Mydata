@@ -91,9 +91,9 @@ fun SyncSection(
             Spacer(modifier = Modifier.height(10.dp))
 
             Text(
-                text = "Vos données restent stockées localement. La synchronisation envoie et " +
-                    "reçoit uniquement les modifications, et la version la plus récente gagne " +
-                    "en cas de conflit.",
+                text = "Vos tables, colonnes et lignes sont synchronisées sur Firebase Firestore " +
+                    "(la version la plus récente gagne en cas de conflit). Les photos restent stockées " +
+                    "localement et incluses dans l'export ZIP.",
                 fontSize = 11.sp,
                 color = AppColors.TextMuted,
                 lineHeight = 16.sp

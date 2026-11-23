@@ -1,0 +1,131 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global deny-by-default fallback
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null && request.auth.uid != null && request.auth.uid.size() > 0;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidTimestamp(ts) {
+      return ts is timestamp && ts <= request.time;
+    }
+
+    function isValidOptionalDeletedAt(data) {
+      return !('deletedAt' in data) || (data.deletedAt is int && data.deletedAt > 0);
+    }
+
+    function isValidJournalData(data, userId) {
+      return data.keys().hasAll(['userId', 'name', 'clientCreatedAt', 'clientUpdatedAt', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['userId', 'name', 'clientCreatedAt', 'clientUpdatedAt', 'createdAt', 'updatedAt', 'deletedAt'])
+        && data.userId is string && data.userId == userId && data.userId.size() >= 1 && data.userId.size() <= 128
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 200
+        && data.clientCreatedAt is int && data.clientCreatedAt >= 0
+        && data.clientUpdatedAt is int && data.clientUpdatedAt >= 0
+        && isValidTimestamp(data.createdAt)
+        && isValidTimestamp(data.updatedAt)
+        && isValidOptionalDeletedAt(data);
+    }
+
+    function isValidPropertyData(data, userId) {
+      return data.keys().hasAll(['userId', 'journalId', 'name', 'kind', 'options', 'sortOrder', 'clientUpdatedAt', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['userId', 'journalId', 'name', 'kind', 'format', 'options', 'sortOrder', 'clientUpdatedAt', 'createdAt', 'updatedAt', 'deletedAt'])
+        && data.userId is string && data.userId == userId && data.userId.size() >= 1 && data.userId.size() <= 128
+        && isValidId(data.journalId)
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 200
+        && data.kind is string && data.kind in ['text', 'number', 'date', 'select']
+        && (!('format' in data) || (data.format is string && data.format in ['plain', 'percent', 'dollar']))
+        && data.options is list && data.options.size() <= 200
+        && data.sortOrder is int && data.sortOrder >= 0 && data.sortOrder <= 10000
+        && data.clientUpdatedAt is int && data.clientUpdatedAt >= 0
+        && isValidTimestamp(data.createdAt)
+        && isValidTimestamp(data.updatedAt)
+        && isValidOptionalDeletedAt(data);
+    }
+
+    function isValidEntryRowData(data, userId) {
+      return data.keys().hasAll(['userId', 'journalId', 'values', 'clientCreatedAt', 'clientUpdatedAt', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['userId', 'journalId', 'values', 'clientCreatedAt', 'clientUpdatedAt', 'createdAt', 'updatedAt', 'deletedAt'])
+        && data.userId is string && data.userId == userId && data.userId.size() >= 1 && data.userId.size() <= 128
+        && isValidId(data.journalId)
+        && data.values is map && data.values.size() <= 200
+        && data.clientCreatedAt is int && data.clientCreatedAt >= 0
+        && data.clientUpdatedAt is int && data.clientUpdatedAt >= 0
+        && isValidTimestamp(data.createdAt)
+        && isValidTimestamp(data.updatedAt)
+        && isValidOptionalDeletedAt(data);
+    }
+
+    match /users/{userId} {
+      match /journals/{journalId} {
+        allow get: if isOwner(userId) && isValidId(journalId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId)
+          && isValidId(journalId)
+          && isValidJournalData(incoming(), userId);
+        allow update: if isOwner(userId)
+          && isValidId(journalId)
+          && isValidJournalData(incoming(), userId)
+          && incoming().userId == existing().userId
+          && incoming().clientCreatedAt == existing().clientCreatedAt
+          && incoming().createdAt == existing().createdAt
+          && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'clientUpdatedAt', 'updatedAt', 'deletedAt']);
+        allow delete: if isOwner(userId) && isValidId(journalId);
+      }
+
+      match /properties/{propertyId} {
+        allow get: if isOwner(userId) && isValidId(propertyId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId)
+          && isValidId(propertyId)
+          && isValidPropertyData(incoming(), userId);
+        allow update: if isOwner(userId)
+          && isValidId(propertyId)
+          && isValidPropertyData(incoming(), userId)
+          && incoming().userId == existing().userId
+          && incoming().journalId == existing().journalId
+          && incoming().createdAt == existing().createdAt
+          && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'kind', 'format', 'options', 'sortOrder', 'clientUpdatedAt', 'updatedAt', 'deletedAt']);
+        allow delete: if isOwner(userId) && isValidId(propertyId);
+      }
+
+      match /entry_rows/{rowId} {
+        allow get: if isOwner(userId) && isValidId(rowId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId)
+          && isValidId(rowId)
+          && isValidEntryRowData(incoming(), userId);
+        allow update: if isOwner(userId)
+          && isValidId(rowId)
+          && isValidEntryRowData(incoming(), userId)
+          && incoming().userId == existing().userId
+          && incoming().journalId == existing().journalId
+          && incoming().clientCreatedAt == existing().clientCreatedAt
+          && incoming().createdAt == existing().createdAt
+          && incoming().diff(existing()).affectedKeys().hasOnly(['values', 'clientUpdatedAt', 'updatedAt', 'deletedAt']);
+        allow delete: if isOwner(userId) && isValidId(rowId);
+      }
+    }
+  }
+}

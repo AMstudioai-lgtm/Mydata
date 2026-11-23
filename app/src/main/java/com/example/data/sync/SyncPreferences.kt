@@ -3,7 +3,7 @@ package com.example.data.sync
 import android.content.Context
 
 /**
- * Curseurs de synchronisation, persistés dans les SharedPreferences.
+ * Curseurs de synchronisation isolés par utilisateur (`userId`), persistés en SharedPreferences.
  *
  * L'ordre d'écriture importe : le curseur n'avance qu'après l'application effective des
  * données. Une interruption laisse donc le curseur en arrière, et la reprise rejoue des
@@ -12,28 +12,37 @@ import android.content.Context
 class SyncPreferences(context: Context) {
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    fun pullCursor(table: String): Long = prefs.getLong(keyPull(table), 0L)
+    fun pullCursor(userId: String, table: String): Long =
+        prefs.getLong(keyPull(userId, table), 0L)
 
-    fun pushCursor(table: String): Long = prefs.getLong(keyPush(table), 0L)
+    fun pushCursor(userId: String, table: String): Long =
+        prefs.getLong(keyPush(userId, table), 0L)
 
-    fun rememberPull(table: String, maxUpdatedAt: Long) {
+    fun rememberPull(userId: String, table: String, maxUpdatedAt: Long) {
         if (maxUpdatedAt <= 0) return
-        prefs.edit().putLong(keyPull(table), maxUpdatedAt).apply()
+        prefs.edit().putLong(keyPull(userId, table), maxUpdatedAt).apply()
     }
 
-    fun rememberPush(table: String, maxUpdatedAt: Long) {
+    fun rememberPush(userId: String, table: String, maxUpdatedAt: Long) {
         if (maxUpdatedAt <= 0) return
-        prefs.edit().putLong(keyPush(table), maxUpdatedAt).apply()
+        prefs.edit().putLong(keyPush(userId, table), maxUpdatedAt).apply()
     }
 
-    fun lastSyncAt(): Long = prefs.getLong(KEY_LAST_SYNC_AT, 0L)
-
-    fun rememberSyncAt(at: Long) {
-        prefs.edit().putLong(KEY_LAST_SYNC_AT, at).apply()
+    fun lastSyncAt(userId: String? = null): Long {
+        val key = if (userId.isNullOrBlank()) KEY_LAST_SYNC_AT else "${KEY_LAST_SYNC_AT}_$userId"
+        return prefs.getLong(key, 0L)
     }
 
-    private fun keyPull(table: String) = "pull_$table"
-    private fun keyPush(table: String) = "push_$table"
+    fun rememberSyncAt(at: Long, userId: String? = null) {
+        val editor = prefs.edit().putLong(KEY_LAST_SYNC_AT, at)
+        if (!userId.isNullOrBlank()) {
+            editor.putLong("${KEY_LAST_SYNC_AT}_$userId", at)
+        }
+        editor.apply()
+    }
+
+    private fun keyPull(userId: String, table: String) = "fs_pull_${userId}_$table"
+    private fun keyPush(userId: String, table: String) = "fs_push_${userId}_$table"
 
     companion object {
         private const val PREFS_NAME = "myapp_sync_prefs"

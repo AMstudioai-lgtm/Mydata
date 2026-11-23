@@ -1,0 +1,188 @@
+{
+  "entities": {
+    "Journal": {
+      "title": "Journal",
+      "description": "A user-owned database/table container synced between Room and Firestore.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID."
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name of the database/table."
+        },
+        "clientCreatedAt": {
+          "type": "integer",
+          "description": "Client creation timestamp in epoch milliseconds."
+        },
+        "clientUpdatedAt": {
+          "type": "integer",
+          "description": "Client last-modified timestamp in epoch milliseconds used for LWW sync."
+        },
+        "deletedAt": {
+          "type": "integer",
+          "description": "Optional soft-delete tombstone timestamp in epoch milliseconds."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Immutable Firestore server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Firestore server last-update timestamp."
+        }
+      },
+      "required": [
+        "userId",
+        "name",
+        "clientCreatedAt",
+        "clientUpdatedAt",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Property": {
+      "title": "Property",
+      "description": "A typed column definition belonging to a Journal.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID."
+        },
+        "journalId": {
+          "type": "string",
+          "description": "Parent Journal document ID."
+        },
+        "name": {
+          "type": "string",
+          "description": "Column header label."
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["text", "number", "date", "select"],
+          "description": "Column data type."
+        },
+        "format": {
+          "type": "string",
+          "enum": ["plain", "percent", "dollar"],
+          "description": "Optional display format for number columns."
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Selectable options for select columns."
+        },
+        "sortOrder": {
+          "type": "integer",
+          "description": "Zero-based column display order."
+        },
+        "clientUpdatedAt": {
+          "type": "integer",
+          "description": "Client last-modified timestamp in epoch milliseconds used for LWW sync."
+        },
+        "deletedAt": {
+          "type": "integer",
+          "description": "Optional soft-delete tombstone timestamp in epoch milliseconds."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Immutable Firestore server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Firestore server last-update timestamp."
+        }
+      },
+      "required": [
+        "userId",
+        "journalId",
+        "name",
+        "kind",
+        "options",
+        "sortOrder",
+        "clientUpdatedAt",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "EntryRow": {
+      "title": "EntryRow",
+      "description": "A single data row inside a Journal, holding typed cell values in a native map.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID."
+        },
+        "journalId": {
+          "type": "string",
+          "description": "Parent Journal document ID."
+        },
+        "values": {
+          "type": "object",
+          "description": "Native key-value map of property IDs to cell values."
+        },
+        "clientCreatedAt": {
+          "type": "integer",
+          "description": "Client creation timestamp in epoch milliseconds."
+        },
+        "clientUpdatedAt": {
+          "type": "integer",
+          "description": "Client last-modified timestamp in epoch milliseconds used for LWW sync."
+        },
+        "deletedAt": {
+          "type": "integer",
+          "description": "Optional soft-delete tombstone timestamp in epoch milliseconds."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Immutable Firestore server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Firestore server last-update timestamp."
+        }
+      },
+      "required": [
+        "userId",
+        "journalId",
+        "values",
+        "clientCreatedAt",
+        "clientUpdatedAt",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/journals/{journalId}": {
+      "schema": {
+        "$ref": "#/entities/Journal"
+      },
+      "description": "Private per-user collection of Mydata journals/tables."
+    },
+    "/users/{userId}/properties/{propertyId}": {
+      "schema": {
+        "$ref": "#/entities/Property"
+      },
+      "description": "Private per-user collection of journal column definitions."
+    },
+    "/users/{userId}/entry_rows/{rowId}": {
+      "schema": {
+        "$ref": "#/entities/EntryRow"
+      },
+      "description": "Private per-user collection of journal rows."
+    }
+  }
+}

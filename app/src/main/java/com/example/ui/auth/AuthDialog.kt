@@ -1,6 +1,6 @@
 package com.example.ui.auth
 
-import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,30 +14,21 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Login
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -49,46 +40,38 @@ fun AuthDialog(
     authState: AuthState,
     isSubmitting: Boolean,
     errorMessage: String?,
-    onSignIn: (String, String) -> Unit,
-    onSignUp: (String, String) -> Unit,
+    onGoogleSignIn: () -> Unit,
     onSignOut: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    var isSignUpMode by remember { mutableStateOf(false) }
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             shape = RoundedCornerShape(12.dp),
             color = AppColors.Panel,
-            border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Border),
-            modifier = Modifier.fillMaxWidth().testTag("auth_dialog")
+            border = BorderStroke(1.dp, AppColors.Border),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("auth_dialog")
         ) {
-            // Le message d'erreur peut être long : la colonne reste scrollable plutôt que
-            // de pousser le bouton hors de l'écran.
             Column(
                 modifier = Modifier
                     .padding(20.dp)
                     .verticalScroll(rememberScrollState())
             ) {
-                // Header with title and close button
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = if (authState is AuthState.LoggedIn) "Mon Compte Supabase"
-                               else if (isSignUpMode) "Créer un compte"
-                               else "Connexion",
+                        text = if (authState is AuthState.LoggedIn) "Compte Google" else "Connexion Google",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = AppColors.TextPrimary
                     )
                     IconButton(
                         onClick = onDismiss,
-                        modifier = Modifier.size(28.dp)
+                        modifier = Modifier.size(32.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
@@ -101,22 +84,30 @@ fun AuthDialog(
                 Spacer(modifier = Modifier.height(14.dp))
 
                 if (authState is AuthState.LoggedIn) {
-                    // Logged in UI
                     Text(
-                        text = "Connecté en tant que :",
+                        text = "Connecté avec Google :",
                         fontSize = 13.sp,
                         color = AppColors.TextSecondary
                     )
+                    if (!authState.session.displayName.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = authState.session.displayName,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = AppColors.TextPrimary
+                        )
+                    }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = authState.session.email,
-                        fontSize = 15.sp,
+                        fontSize = 14.sp,
                         fontWeight = FontWeight.Medium,
-                        color = AppColors.Accent
+                        color = AppColors.AccentLight
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "ID: ${authState.session.userId.ifEmpty { "Session locale" }}",
+                        text = "UID Firebase : ${authState.session.userId}",
                         fontSize = 11.sp,
                         color = AppColors.TextMuted
                     )
@@ -132,7 +123,7 @@ fun AuthDialog(
                             colors = ButtonDefaults.outlinedButtonColors(
                                 contentColor = AppColors.TextSecondary
                             ),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Border)
+                            border = BorderStroke(1.dp, AppColors.Border)
                         ) {
                             Text("Fermer")
                         }
@@ -145,52 +136,18 @@ fun AuthDialog(
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = AppColors.ErrorRed,
                                 contentColor = AppColors.TextPrimary
-                            )
+                            ),
+                            modifier = Modifier.testTag("auth_logout_button")
                         ) {
                             Text("Se déconnecter")
                         }
                     }
                 } else {
-                    // Form fields
-                    OutlinedTextField(
-                        value = email,
-                        onValueChange = { email = it },
-                        label = { Text("Adresse e-mail") },
-                        leadingIcon = {
-                            Icon(Icons.Default.Email, contentDescription = null, tint = AppColors.TextSecondary)
-                        },
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = AppColors.Accent,
-                            unfocusedBorderColor = AppColors.Border,
-                            focusedTextColor = AppColors.TextPrimary,
-                            unfocusedTextColor = AppColors.TextPrimary,
-                            focusedContainerColor = AppColors.Background,
-                            unfocusedContainerColor = AppColors.Background
-                        ),
-                        modifier = Modifier.fillMaxWidth().testTag("auth_email_input")
-                    )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    OutlinedTextField(
-                        value = password,
-                        onValueChange = { password = it },
-                        label = { Text("Mot de passe") },
-                        leadingIcon = {
-                            Icon(Icons.Default.Lock, contentDescription = null, tint = AppColors.TextSecondary)
-                        },
-                        singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = AppColors.Accent,
-                            unfocusedBorderColor = AppColors.Border,
-                            focusedTextColor = AppColors.TextPrimary,
-                            unfocusedTextColor = AppColors.TextPrimary,
-                            focusedContainerColor = AppColors.Background,
-                            unfocusedContainerColor = AppColors.Background
-                        ),
-                        modifier = Modifier.fillMaxWidth().testTag("auth_password_input")
+                    Text(
+                        text = "Utilisez votre compte Google pour accéder à vos données et activer la synchronisation Firebase Firestore.",
+                        fontSize = 13.sp,
+                        lineHeight = 19.sp,
+                        color = AppColors.TextSecondary
                     )
 
                     if (!errorMessage.isNullOrBlank()) {
@@ -203,24 +160,20 @@ fun AuthDialog(
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                    // Submit button
                     Button(
-                        onClick = {
-                            if (isSignUpMode) {
-                                onSignUp(email, password)
-                            } else {
-                                onSignIn(email, password)
-                            }
-                        },
-                        enabled = !isSubmitting && email.isNotBlank() && password.isNotBlank(),
+                        onClick = onGoogleSignIn,
+                        enabled = !isSubmitting,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = AppColors.Accent,
                             contentColor = AppColors.OnAccent
                         ),
                         shape = RoundedCornerShape(6.dp),
-                        modifier = Modifier.fillMaxWidth().height(46.dp).testTag("auth_submit_button")
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .testTag("auth_submit_button")
                     ) {
                         if (isSubmitting) {
                             CircularProgressIndicator(
@@ -229,26 +182,17 @@ fun AuthDialog(
                                 strokeWidth = 2.dp
                             )
                         } else {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Login,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = if (isSignUpMode) "S'inscrire" else "Se connecter",
+                                text = "Continuer avec Google",
                                 fontWeight = FontWeight.Medium
                             )
                         }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Toggle mode
-                    TextButton(
-                        onClick = { isSignUpMode = !isSignUpMode },
-                        modifier = Modifier.align(Alignment.CenterHorizontally)
-                    ) {
-                        Text(
-                            text = if (isSignUpMode) "Déjà un compte ? Se connecter"
-                                   else "Pas encore de compte ? S'inscrire",
-                            color = AppColors.AccentLight,
-                            fontSize = 13.sp
-                        )
                     }
                 }
             }

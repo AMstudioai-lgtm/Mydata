@@ -1,19 +1,19 @@
 package com.example.di
 
 import android.content.Context
-import com.example.BuildConfig
-import com.example.data.auth.SupabaseAuthService
+import com.example.R
+import com.example.data.auth.FirebaseAuthService
 import com.example.data.backup.BackupManager
 import com.example.data.db.AppDatabase
+import com.example.data.images.ImageStore
 import com.example.data.repository.JournalRepository
 import com.example.data.session.SessionProvider
 import com.example.data.session.asSessionProvider
-import com.example.data.images.ImageStore
-import com.example.data.images.SupabaseStorageClient
-import com.example.data.sync.SupabaseSyncClient
+import com.example.data.sync.FirestoreSyncClient
 import com.example.data.sync.SyncPreferences
 import com.example.data.sync.SyncRepository
 import com.example.data.update.UpdateChecker
+import com.google.firebase.firestore.FirebaseFirestore
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
@@ -21,53 +21,25 @@ class AppContainer(context: Context) {
     private val appContext = context.applicationContext
 
     val database: AppDatabase = AppDatabase.getInstance(appContext)
-    val authService: SupabaseAuthService = SupabaseAuthService(appContext)
+    val authService: FirebaseAuthService = FirebaseAuthService()
     private val sessionProvider: SessionProvider = authService.asSessionProvider()
 
     val journalRepository: JournalRepository = JournalRepository(database, sessionProvider)
 
     /**
-     * Les identifiants Supabase proviennent du BuildConfig, alimenté par le plugin `secrets`
-     * depuis `.env` (local, gitignoré) avec `.env.example` comme valeurs de repli.
-     * Aucune clé n'est écrite dans le code source.
+     * Instance Firestore nommée provisionnée pour ce projet AI Studio
+     * (identifiant issu de R.string.firestore_database_id, jamais la base par défaut).
      */
-    private val isSupabaseConfigured: Boolean =
-        BuildConfig.SUPABASE_URL.startsWith("http") &&
-            BuildConfig.SUPABASE_KEY.isNotBlank() &&
-            BuildConfig.SUPABASE_KEY != "your_supabase_key_here"
+    private val firestore: FirebaseFirestore by lazy {
+        val databaseId = appContext.getString(R.string.firestore_database_id)
+        FirebaseFirestore.getInstance(databaseId)
+    }
 
-    private val syncClient: SupabaseSyncClient? =
-        if (isSupabaseConfigured) {
-            SupabaseSyncClient(
-                baseUrl = BuildConfig.SUPABASE_URL,
-                apiKey = BuildConfig.SUPABASE_KEY,
-                tokenProvider = { authService.validAccessToken() },
-                onTokenExpired = { authService.refreshSession() }
-            )
-        } else {
-            null
-        }
+    private val syncClient: FirestoreSyncClient by lazy {
+        FirestoreSyncClient(firestore = firestore)
+    }
 
-    /**
-     * Stockage des images de lignes, adossé aux mêmes identifiants Supabase que la
-     * synchro. Nul si Supabase n'est pas configuré : la synchro ignore alors les images.
-     *
-     * Déclaré AVANT syncRepository : Kotlin initialise dans l'ordre de déclaration,
-     * et syncRepository en a besoin dès sa construction.
-     */
-    private val storageClient: SupabaseStorageClient? =
-        if (isSupabaseConfigured) {
-            SupabaseStorageClient(
-                baseUrl = BuildConfig.SUPABASE_URL,
-                apiKey = BuildConfig.SUPABASE_KEY,
-                tokenProvider = { authService.validAccessToken() },
-                onTokenExpired = { authService.refreshSession() }
-            )
-        } else {
-            null
-        }
-
-    private val imageStore: ImageStore = ImageStore(appContext, storageClient)
+    private val imageStore: ImageStore = ImageStore(appContext)
 
     val backupManager: BackupManager = BackupManager(
         context = appContext,
@@ -76,29 +48,17 @@ class AppContainer(context: Context) {
         imageStore = imageStore
     )
 
-    val syncRepository: SyncRepository? = syncClient?.let { client ->
+    val syncRepository: SyncRepository by lazy {
         SyncRepository(
             db = database,
-            client = client,
+            client = syncClient,
             prefs = SyncPreferences(appContext),
-            sessionProvider = { authService.getCachedSession() },
-            authService = authService,
-            imageStore = imageStore
+            sessionProvider = { authService.getCachedSession() }
         )
     }
 
-    /**
-     * Préférences partagées avec la synchro (même fichier `myapp_sync_prefs`,
-     * clés disjointes `last_update_*` / `auto_sync`) : un seul fichier à
-     * sauvegarder, aucun conflit d'écriture.
-     */
     private val syncPrefs = appContext.getSharedPreferences("myapp_sync_prefs", Context.MODE_PRIVATE)
 
-    /**
-     * Vérificateur de mises à jour GitHub. Les clients Supabase gardent leur
-     * OkHttpClient privé : il n'y a pas de client partageable accessible, donc
-     * un client dédié est construit ici avec des timeouts courts.
-     */
     val updateChecker: UpdateChecker = UpdateChecker(
         prefs = syncPrefs,
         client = OkHttpClient.Builder()
