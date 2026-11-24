@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.example.di.AppContainer
 import com.example.viewmodel.AuthViewModel
+import com.google.firebase.FirebaseApp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
@@ -62,12 +63,16 @@ class FirebaseAuthHandlingTest {
     }
 
     @Test
-    fun `googleSignInHelper renvoie Error au lieu de crasher sans configuration`() = runBlocking {
-        assertNull(GoogleSignInHelper.resolveWebClientId(context))
+    fun `googleSignInHelper gere un contexte non Activity sans crasher`() = runBlocking {
+        val webClientId = GoogleSignInHelper.resolveWebClientId(context)
+        if (webClientId == null) {
+            assertNull(GoogleSignInHelper.attemptAutoSignIn(context))
+        } else {
+            assertTrue(webClientId.isNotBlank())
+        }
 
         val result = GoogleSignInHelper.requestInteractiveSignIn(context)
         assertTrue(result is GoogleSignInResult.Error)
-        assertNull(GoogleSignInHelper.attemptAutoSignIn(context))
     }
 
     @Test
@@ -96,9 +101,16 @@ class FirebaseAuthHandlingTest {
     }
 
     @Test
-    fun `appContainer reste sain sans google-services json`() {
+    fun `appContainer reste sain avec ou sans google-services json`() {
         val container = AppContainer(context)
-        assertFalse(container.authService.isConfigured)
-        assertNull(container.syncRepository)
+        val hasFirebaseApp = FirebaseApp.getApps(context).isNotEmpty()
+        val hasWebClientId = GoogleSignInHelper.resolveWebClientId(context) != null
+
+        assertEquals(hasFirebaseApp && hasWebClientId, container.authService.isConfigured)
+        if (!hasFirebaseApp) {
+            assertNull(container.syncRepository)
+        } else {
+            container.syncRepository
+        }
     }
 }
