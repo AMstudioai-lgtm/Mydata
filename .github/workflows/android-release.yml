@@ -218,7 +218,7 @@ jobs:
           COMMIT: ${{ steps.version.outputs.commit }}
         run: |
           set -euo pipefail
-          gh release create "v$VERSION" "Mydata-$V.apk" --title "Mydata v$VERSION" --notes-file changelog.md --target "$COMMIT"
+          gh release create "v$VERSION" "Mydata-$VERSION.apk" --title "Mydata v$VERSION" --notes-file changelog.md --target "$COMMIT"
 
       - name: Nettoyer les anciennes releases
         if: ${{ inputs.dry_run != true }}
