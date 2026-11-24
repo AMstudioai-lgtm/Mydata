@@ -21,6 +21,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -44,7 +45,9 @@ fun AuthScreen(
     isSubmitting: Boolean,
     errorMessage: String?,
     onGoogleSignIn: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isAuthConfigured: Boolean = true,
+    onContinueOffline: (() -> Unit)? = null
 ) {
     Scaffold(
         containerColor = AppColors.Background,
@@ -124,7 +127,7 @@ fun AuthScreen(
                         ) {
                             Button(
                                 onClick = onGoogleSignIn,
-                                enabled = !isSubmitting,
+                                enabled = !isSubmitting && isAuthConfigured,
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = AppColors.Accent,
                                     contentColor = AppColors.OnAccent
@@ -159,6 +162,39 @@ fun AuthScreen(
                                         fontSize = 14.sp,
                                         fontWeight = FontWeight.SemiBold
                                     )
+                                }
+                            }
+
+                            if (!isAuthConfigured) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    text = "Connexion Google indisponible : google-services.json est absent de ce build.",
+                                    color = AppColors.WarningAmber,
+                                    fontSize = 12.sp,
+                                    lineHeight = 17.sp,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                if (onContinueOffline != null) {
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    OutlinedButton(
+                                        onClick = onContinueOffline,
+                                        colors = ButtonDefaults.outlinedButtonColors(
+                                            contentColor = AppColors.TextPrimary
+                                        ),
+                                        border = BorderStroke(1.dp, AppColors.Border),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(46.dp)
+                                            .testTag("continue_offline_button")
+                                    ) {
+                                        Text(
+                                            text = "Continuer hors connexion",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
                                 }
                             }
 
