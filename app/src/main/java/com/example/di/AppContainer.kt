@@ -13,6 +13,7 @@ import com.example.data.sync.FirestoreSyncClient
 import com.example.data.sync.SyncPreferences
 import com.example.data.sync.SyncRepository
 import com.example.data.update.UpdateChecker
+import com.google.firebase.FirebaseApp
 import com.google.firebase.firestore.FirebaseFirestore
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
@@ -21,7 +22,7 @@ class AppContainer(context: Context) {
     private val appContext = context.applicationContext
 
     val database: AppDatabase = AppDatabase.getInstance(appContext)
-    val authService: FirebaseAuthService = FirebaseAuthService()
+    val authService: FirebaseAuthService = FirebaseAuthService(context = appContext)
     private val sessionProvider: SessionProvider = authService.asSessionProvider()
 
     val journalRepository: JournalRepository = JournalRepository(database, sessionProvider)
@@ -29,14 +30,23 @@ class AppContainer(context: Context) {
     /**
      * Instance Firestore nommée provisionnée pour ce projet AI Studio
      * (identifiant issu de R.string.firestore_database_id, jamais la base par défaut).
+     * Nulle si Firebase n'est pas initialisé (ex. APK compilé sans google-services.json).
      */
-    private val firestore: FirebaseFirestore by lazy {
-        val databaseId = appContext.getString(R.string.firestore_database_id)
-        FirebaseFirestore.getInstance(databaseId)
+    private val firestore: FirebaseFirestore? by lazy {
+        if (FirebaseApp.getApps(appContext).isEmpty()) {
+            null
+        } else {
+            try {
+                val databaseId = appContext.getString(R.string.firestore_database_id).trim()
+                if (databaseId.isEmpty()) null else FirebaseFirestore.getInstance(databaseId)
+            } catch (_: Exception) {
+                null
+            }
+        }
     }
 
-    private val syncClient: FirestoreSyncClient by lazy {
-        FirestoreSyncClient(firestore = firestore)
+    private val syncClient: FirestoreSyncClient? by lazy {
+        firestore?.let { FirestoreSyncClient(firestore = it) }
     }
 
     private val imageStore: ImageStore = ImageStore(appContext)
@@ -48,13 +58,15 @@ class AppContainer(context: Context) {
         imageStore = imageStore
     )
 
-    val syncRepository: SyncRepository by lazy {
-        SyncRepository(
-            db = database,
-            client = syncClient,
-            prefs = SyncPreferences(appContext),
-            sessionProvider = { authService.getCachedSession() }
-        )
+    val syncRepository: SyncRepository? by lazy {
+        syncClient?.let { client ->
+            SyncRepository(
+                db = database,
+                client = client,
+                prefs = SyncPreferences(appContext),
+                sessionProvider = { authService.getCachedSession() }
+            )
+        }
     }
 
     private val syncPrefs = appContext.getSharedPreferences("myapp_sync_prefs", Context.MODE_PRIVATE)

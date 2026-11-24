@@ -49,11 +49,14 @@ class MainActivity : ComponentActivity() {
             val authState by authViewModel.authState.collectAsStateWithLifecycle()
             val isAuthSubmitting by authViewModel.isSubmitting.collectAsStateWithLifecycle()
             val authErrorMessage by authViewModel.errorMessage.collectAsStateWithLifecycle()
+            var allowOfflineMode by remember { mutableStateOf(false) }
 
             // Reconnexion silencieuse Google via Credential Manager dès le démarrage si déconnecté.
             LaunchedEffect(authState) {
                 if (authState is AuthState.LoggedOut) {
                     authViewModel.attemptSilentSignIn(this@MainActivity)
+                } else if (authState is AuthState.LoggedIn) {
+                    allowOfflineMode = false
                 }
             }
 
@@ -66,25 +69,35 @@ class MainActivity : ComponentActivity() {
 
             AppTheme {
                 val loggedInState = authState as? AuthState.LoggedIn
-                if (loggedInState == null) {
+                if (loggedInState == null && !allowOfflineMode) {
+                    val isConfigured = authViewModel.isAuthConfigured
                     AuthScreen(
                         authState = authState,
                         isSubmitting = isAuthSubmitting,
                         errorMessage = authErrorMessage,
-                        onGoogleSignIn = { authViewModel.signInWithGoogle(this@MainActivity) }
+                        onGoogleSignIn = { authViewModel.signInWithGoogle(this@MainActivity) },
+                        isAuthConfigured = isConfigured,
+                        onContinueOffline = if (!isConfigured) {
+                            { allowOfflineMode = true }
+                        } else {
+                            null
+                        }
                     )
                 } else {
-                    val uid = loggedInState.session.userId
-                    key(uid) {
+                    val uid = loggedInState?.session?.userId
+                    key(uid ?: "offline") {
                         AuthenticatedWorkspace(
                             userId = uid,
-                            authState = loggedInState,
+                            authState = authState,
                             isAuthSubmitting = isAuthSubmitting,
                             authErrorMessage = authErrorMessage,
                             container = container,
                             syncPrefs = remember { getSharedPreferences("myapp_sync_prefs", MODE_PRIVATE) },
                             onGoogleSignIn = { authViewModel.signInWithGoogle(this@MainActivity) },
-                            onSignOut = { authViewModel.signOut(this@MainActivity) }
+                            onSignOut = {
+                                allowOfflineMode = false
+                                authViewModel.signOut(this@MainActivity)
+                            }
                         )
                     }
                 }
@@ -107,8 +120,8 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun AuthenticatedWorkspace(
-    userId: String,
-    authState: AuthState.LoggedIn,
+    userId: String?,
+    authState: AuthState,
     isAuthSubmitting: Boolean,
     authErrorMessage: String?,
     container: AppContainer,
@@ -116,12 +129,13 @@ private fun AuthenticatedWorkspace(
     onGoogleSignIn: () -> Unit,
     onSignOut: () -> Unit
 ) {
+    val workspaceKey = userId ?: "offline"
     val journalViewModel: JournalViewModel = viewModel(
-        key = "journal_$userId",
+        key = "journal_$workspaceKey",
         factory = JournalViewModel.Factory(container.journalRepository, container.backupManager)
     )
     val syncViewModel: SyncViewModel = viewModel(
-        key = "sync_$userId",
+        key = "sync_$workspaceKey",
         factory = SyncViewModel.Factory(container.syncRepository)
     )
 
@@ -147,9 +161,11 @@ private fun AuthenticatedWorkspace(
     // puis déclenche la synchronisation Firestore initiale.
     LaunchedEffect(userId) {
         journalViewModel.setCurrentUser(userId)
-        container.journalRepository.adoptOrphans(userId)
-        if (isAutoSyncEnabled) {
-            syncViewModel.syncNow()
+        if (userId != null) {
+            container.journalRepository.adoptOrphans(userId)
+            if (isAutoSyncEnabled) {
+                syncViewModel.syncNow()
+            }
         }
     }
 

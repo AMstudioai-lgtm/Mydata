@@ -1,6 +1,9 @@
 package com.example.data.auth
 
+import android.annotation.SuppressLint
+import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
 import android.util.Log
 import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.CredentialManager
@@ -9,7 +12,6 @@ import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialException
 import androidx.credentials.exceptions.NoCredentialException
-import com.example.R
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
@@ -35,7 +37,9 @@ object GoogleSignInHelper {
 
     suspend fun attemptAutoSignIn(activityContext: Context): String? {
         val serverClientId = resolveWebClientId(activityContext) ?: return null
-        val credentialManager = CredentialManager.create(activityContext)
+        val activity = activityContext.findActivity() ?: return null
+        if (activity.isFinishing || activity.isDestroyed) return null
+
         val googleIdOption = GetGoogleIdOption.Builder()
             .setFilterByAuthorizedAccounts(true)
             .setServerClientId(serverClientId)
@@ -46,8 +50,9 @@ object GoogleSignInHelper {
             .build()
 
         return try {
+            val credentialManager = CredentialManager.create(activity)
             val result = credentialManager.getCredential(
-                context = activityContext,
+                context = activity,
                 request = request
             )
             extractIdToken(result.credential)
@@ -64,6 +69,9 @@ object GoogleSignInHelper {
         } catch (e: Exception) {
             Log.w(TAG, "Silent Google auto sign-in failed: ${e.message}", e)
             null
+        } catch (e: LinkageError) {
+            Log.w(TAG, "Silent Google auto sign-in unavailable (Play Services): ${e.message}", e)
+            null
         }
     }
 
@@ -72,8 +80,14 @@ object GoogleSignInHelper {
             ?: return GoogleSignInResult.Error(
                 "Configuration Google Sign-In manquante (default_web_client_id absent)."
             )
+        val activity = activityContext.findActivity()
+            ?: return GoogleSignInResult.Error(
+                "Impossible d'ouvrir Google Sign-In hors d'une activité Android."
+            )
+        if (activity.isFinishing || activity.isDestroyed) {
+            return GoogleSignInResult.Error("Fenêtre de connexion indisponible, réessayez.")
+        }
 
-        val credentialManager = CredentialManager.create(activityContext)
         val signInOption = GetSignInWithGoogleOption.Builder(serverClientId = serverClientId)
             .build()
         val request = GetCredentialRequest.Builder()
@@ -81,8 +95,9 @@ object GoogleSignInHelper {
             .build()
 
         return try {
+            val credentialManager = CredentialManager.create(activity)
             val result = credentialManager.getCredential(
-                context = activityContext,
+                context = activity,
                 request = request
             )
             val token = extractIdToken(result.credential)
@@ -105,6 +120,9 @@ object GoogleSignInHelper {
         } catch (e: Exception) {
             Log.w(TAG, "Unexpected Google Sign-In failure: ${e.message}", e)
             GoogleSignInResult.Error(e.message ?: "Erreur inattendue lors de la connexion Google.")
+        } catch (e: LinkageError) {
+            Log.w(TAG, "Google Play Services / Credential Manager unavailable: ${e.message}", e)
+            GoogleSignInResult.Error("Services Google Play indisponibles sur cet appareil.")
         }
     }
 
@@ -117,16 +135,35 @@ object GoogleSignInHelper {
                 throw e
             } catch (e: Exception) {
                 Log.w(TAG, "Unable to clear Credential Manager state: ${e.message}", e)
+            } catch (e: LinkageError) {
+                Log.w(TAG, "Unable to clear Credential Manager state: ${e.message}", e)
             }
         }
     }
 
-    private fun resolveWebClientId(context: Context): String? {
+    /**
+     * Résout `default_web_client_id` dynamiquement pour éviter une erreur de compilation
+     * lorsque `app/google-services.json` est absent (mode passthrough en CI).
+     */
+    @SuppressLint("DiscouragedApi")
+    internal fun resolveWebClientId(context: Context): String? {
+        val resId = context.resources.getIdentifier(
+            "default_web_client_id",
+            "string",
+            context.packageName
+        )
+        if (resId == 0) return null
         return try {
-            context.getString(R.string.default_web_client_id).trim().takeIf { it.isNotEmpty() }
+            context.getString(resId).trim().takeIf { it.isNotEmpty() }
         } catch (_: Exception) {
             null
         }
+    }
+
+    private tailrec fun Context.findActivity(): Activity? = when (this) {
+        is Activity -> this
+        is ContextWrapper -> baseContext.findActivity()
+        else -> null
     }
 
     private fun extractIdToken(credential: androidx.credentials.Credential): String? {

@@ -9,6 +9,7 @@ import com.example.data.auth.FirebaseAuthService
 import com.example.data.auth.GoogleSignInHelper
 import com.example.data.auth.GoogleSignInResult
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -44,6 +45,7 @@ class AuthViewModel(
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
     private var autoSignInAttempted = false
+    private var silentSignInJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -58,16 +60,27 @@ class AuthViewModel(
     }
 
     fun attemptSilentSignIn(activityContext: Context) {
-        if (autoSignInAttempted || _authState.value is AuthState.LoggedIn) return
+        if (autoSignInAttempted || _authState.value is AuthState.LoggedIn || _isSubmitting.value) return
         autoSignInAttempted = true
-        viewModelScope.launch {
+        if (!authService.isConfigured) return
+        silentSignInJob = viewModelScope.launch {
             val idToken = GoogleSignInHelper.attemptAutoSignIn(activityContext) ?: return@launch
-            signInWithGoogleIdToken(idToken)
+            if (!_isSubmitting.value && _authState.value !is AuthState.LoggedIn) {
+                signInWithGoogleIdToken(idToken)
+            }
         }
     }
 
     fun signInWithGoogle(activityContext: Context) {
         if (_isSubmitting.value) return
+        // Évite toute collision Credential Manager avec la reconnexion silencieuse.
+        silentSignInJob?.cancel()
+        silentSignInJob = null
+        if (!authService.isConfigured) {
+            _errorMessage.value =
+                "Firebase / Google Sign-In n'est pas configuré dans ce build (google-services.json manquant)."
+            return
+        }
         viewModelScope.launch {
             _isSubmitting.value = true
             _errorMessage.value = null
@@ -118,6 +131,8 @@ class AuthViewModel(
     }
 
     fun signOut(context: Context) {
+        silentSignInJob?.cancel()
+        silentSignInJob = null
         viewModelScope.launch {
             withContext(NonCancellable) {
                 GoogleSignInHelper.clearCredentialState(context)

@@ -120,6 +120,26 @@ jobs:
             echo "SIGNING=ephemeral" >> "$GITHUB_ENV"
           fi
 
+      - name: Préparer google-services.json
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+          GOOGLE_SERVICES_JSON_B64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [ -n "$GOOGLE_SERVICES_JSON_B64" ]; then
+            printf '%s' "$GOOGLE_SERVICES_JSON_B64" | tr -d '\n\r ' | base64 -d > app/google-services.json
+            python3 -m json.tool app/google-services.json > /dev/null
+            echo "app/google-services.json préparé depuis GOOGLE_SERVICES_JSON_BASE64."
+          elif [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
+            python3 -m json.tool app/google-services.json > /dev/null
+            echo "app/google-services.json préparé depuis GOOGLE_SERVICES_JSON."
+          elif [ -f app/google-services.json ]; then
+            echo "app/google-services.json déjà présent dans le dépôt."
+          else
+            echo "::warning::app/google-services.json absent (ajoutez le secret GOOGLE_SERVICES_JSON ou GOOGLE_SERVICES_JSON_BASE64 pour activer Google Sign-In / Firestore)."
+          fi
+
       - name: Compiler l'APK release
         run: gradle :app:assembleRelease --no-daemon --stacktrace
 
