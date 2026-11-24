@@ -41,6 +41,8 @@ class AppContainer(context: Context) {
                 if (databaseId.isEmpty()) null else FirebaseFirestore.getInstance(databaseId)
             } catch (_: Exception) {
                 null
+            } catch (_: LinkageError) {
+                null
             }
         }
     }
