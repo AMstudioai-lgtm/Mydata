@@ -84,3 +84,11 @@ jobs:
 
       - name: Tests unitaires
         run: gradle :app:testDebugUnitTest --no-daemon --stacktrace
+
+      - name: Rapports de tests (en cas d'échec)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: app/build/reports/tests/testDebugUnitTest/
+          if-no-files-found: ignore
